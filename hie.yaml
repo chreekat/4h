@@ -10,16 +10,10 @@ cradle:
         cradle:
           cabal:
             - path: "src"
-              component: "lib:fourmolu"
+              component: "lib:4h"
 
             - path: "app"
-              component: "fourmolu:exe:fourmolu"
+              component: "4h:exe:4h"
 
             - path: "tests"
-              component: "fourmolu:test:tests"
-
-    - path: "config"
-      config:
-        cradle:
-          direct:
-            arguments: ["-iconfig"]
+              component: "4h:test:tests"

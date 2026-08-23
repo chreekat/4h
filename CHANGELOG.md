@@ -1,3 +1,24 @@
+## 4h 0.1.0.0
+
+Forked from Fourmolu 0.20.1.0.
+
+* 4h implements one formatting style and admits no configuration. There is no
+  `fourmolu.yaml`, no `--print-defaults`, and no per-option CLI flags; the
+  style lives in `src/Ormolu/Style.hs`. Fixity overrides and module re-exports
+  are unaffected — they are still read from `.ormolu` files, cabal files, and
+  the `--fixity`, `--reexport`, `--package` and `--ghc-opt` flags.
+
+* The style is Ormolu's, with seven deviations: four-space indentation, leading
+  commas, diff-friendly import and export lists, leading function arrows, and
+  sorted constraints, derived classes and deriving clauses. Notably,
+  `single-constraint-parens` and `single-deriving-parens` keep Ormolu's
+  `always`, so a single constraint is still written `(Show a) => ...`.
+
+* Custom import grouping is gone along with the configuration that selected it;
+  imports are sorted into a single group, as in Ormolu.
+
+* The executable and package are named `4h`.
+
 ## Fourmolu 0.20.1.0
 
 ### Upstream changes:

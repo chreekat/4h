@@ -15,19 +15,19 @@ def main() -> None:
     subparsers = parser.add_subparsers(required=True)
 
     parser_validate_changelog = subparsers.add_parser("validate-changelog")
-    parser_validate_changelog.add_argument("--fourmolu-version", required=True)
+    parser_validate_changelog.add_argument("--release-version", required=True)
     parser_validate_changelog.set_defaults(
         run=lambda args: validate_changelog(
-            version=args.fourmolu_version,
+            version=args.release_version,
         )
     )
 
     parser_generate = subparsers.add_parser("generate")
-    parser_generate.add_argument("--fourmolu-version", required=True)
+    parser_generate.add_argument("--release-version", required=True)
     parser_generate.add_argument("--bin", required=True, nargs=2, action="append")
     parser_generate.set_defaults(
         run=lambda args: generate(
-            version=args.fourmolu_version,
+            version=args.release_version,
             binaries={
                 label: Path(bin_path)
                 for label, bin_path in args.bin
@@ -76,19 +76,19 @@ def generate(version: str, binaries: Mapping[str, Path]) -> None:
     print("\n".join(release_notes))
 
 
-BASE_DOWNLOAD_URL = "https://github.com/fourmolu/fourmolu/releases/download"
+BASE_DOWNLOAD_URL = "https://github.com/chreekat/4h/releases/download"
 
 
 def get_dotslash_config(version: str, binaries: Mapping[str, Path]) -> Any:
     return {
-        "name": f"fourmolu-{version}",
+        "name": f"4h-{version}",
         "platforms": {
             name: {
                 "size": bin_path.stat().st_size,
                 "hash": "sha256",
                 "digest": get_digest(bin_path),
                 "format": "zip",
-                "path": f"{bin_path.name.removesuffix(".zip")}/fourmolu",
+                "path": f"{bin_path.name.removesuffix(".zip")}/4h",
                 "providers": [
                     {"url": f"{BASE_DOWNLOAD_URL}/v{version}/{bin_path.name}"},
                 ],

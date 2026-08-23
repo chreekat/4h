@@ -5,11 +5,10 @@
 {-# LANGUAGE ViewPatterns #-}
 
 -- | Rendering of declarations.
-module Ormolu.Printer.Meat.Declaration
-  ( p_hsDecls,
+module Ormolu.Printer.Meat.Declaration (
+    p_hsDecls,
     p_hsDeclsRespectGrouping,
-  )
-where
+) where
 
 import Data.Choice (pattern Without)
 import Data.List (sort)
@@ -40,11 +39,11 @@ import Ormolu.Printer.Meat.Type
 import Ormolu.Utils
 
 data UserGrouping
-  = -- | Always put newlines where we think they should be
-    Disregard
-  | -- | Respect user preferences regarding grouping
-    Respect
-  deriving (Eq, Show)
+    = -- | Always put newlines where we think they should be
+      Disregard
+    | -- | Respect user preferences regarding grouping
+      Respect
+    deriving (Eq, Show)
 
 p_hsDecls :: FamilyStyle -> [LHsDecl GhcPs] -> R ()
 p_hsDecls = p_hsDecls' Disregard
@@ -59,181 +58,181 @@ p_hsDeclsRespectGrouping = p_hsDecls' Respect
 
 p_hsDecls' :: UserGrouping -> FamilyStyle -> [LHsDecl GhcPs] -> R ()
 p_hsDecls' grouping style decls = do
-  isSig <- (== SignatureSource) <$> askSourceType
-  sepSemi id $
-    -- Return a list of rendered declarations, adding a newline to separate
-    -- groups.
-    case groupDecls isSig decls of
-      [] -> []
-      (x : xs) -> renderGroup x ++ concat (zipWith renderGroupWithPrev (x : xs) xs)
-  where
-    renderGroup = NE.toList . fmap (located' $ dontUseBraces . p_hsDecl style)
-    renderGroupWithPrev prev curr =
-      -- We can omit a blank line when the user didn't add one, but we must
-      -- ensure we always add blank lines around documented declarations
-      case grouping of
-        Disregard ->
-          declNewline : renderGroup curr
-        Respect ->
-          if separatedByBlankNE getLocA prev curr
-            || isDocumented prev
-            || isDocumented curr
-            then declNewline : renderGroup curr
-            else renderGroup curr
+    isSig <- (== SignatureSource) <$> askSourceType
+    sepSemi id $
+        -- Return a list of rendered declarations, adding a newline to separate
+        -- groups.
+        case groupDecls isSig decls of
+            [] -> []
+            (x : xs) -> renderGroup x ++ concat (zipWith renderGroupWithPrev (x : xs) xs)
+    where
+        renderGroup = NE.toList . fmap (located' $ dontUseBraces . p_hsDecl style)
+        renderGroupWithPrev prev curr =
+            -- We can omit a blank line when the user didn't add one, but we must
+            -- ensure we always add blank lines around documented declarations
+            case grouping of
+                Disregard ->
+                    declNewline : renderGroup curr
+                Respect ->
+                    if separatedByBlankNE getLocA prev curr
+                        || isDocumented prev
+                        || isDocumented curr
+                        then declNewline : renderGroup curr
+                        else renderGroup curr
 
 -- | Is a declaration group documented?
 isDocumented :: NonEmpty (LHsDecl GhcPs) -> Bool
 isDocumented = any (isHaddock . unLoc)
-  where
-    isHaddock DocNext = True
-    isHaddock DocPrev = True
-    isHaddock _ = False
+    where
+        isHaddock DocNext = True
+        isHaddock DocPrev = True
+        isHaddock _ = False
 
 -- | Group relevant declarations together.
-groupDecls ::
-  -- | Is the source a signature file?
-  Bool ->
-  -- | List of declarations
-  [LHsDecl GhcPs] ->
-  [NonEmpty (LHsDecl GhcPs)]
+groupDecls
+    :: Bool
+    -- ^ Is the source a signature file?
+    -> [LHsDecl GhcPs]
+    -- ^ List of declarations
+    -> [NonEmpty (LHsDecl GhcPs)]
 groupDecls _ [] = []
 groupDecls isSig (l@(L _ DocNext) : xs) =
-  -- If the first element is a doc string for next element, just include it
-  -- in the next block:
-  case groupDecls isSig xs of
-    [] -> [l :| []]
-    (x : xs') -> (l <| x) : xs'
+    -- If the first element is a doc string for next element, just include it
+    -- in the next block:
+    case groupDecls isSig xs of
+        [] -> [l :| []]
+        (x : xs') -> (l <| x) : xs'
 groupDecls isSig (header : xs) =
-  let (grp, rest) = flip span (zip (header : xs) xs) $ \(previous, current) ->
-        let relevantToHdr = groupedDecls header current
-            relevantToPrev = groupedDecls previous current
-            isDeclSeries = not isSig && declSeries previous current
-         in isDeclSeries || relevantToHdr || relevantToPrev
-   in (header :| map snd grp) : groupDecls isSig (map snd rest)
+    let (grp, rest) = flip span (zip (header : xs) xs) $ \(previous, current) ->
+            let relevantToHdr = groupedDecls header current
+                relevantToPrev = groupedDecls previous current
+                isDeclSeries = not isSig && declSeries previous current
+             in isDeclSeries || relevantToHdr || relevantToPrev
+     in (header :| map snd grp) : groupDecls isSig (map snd rest)
 
 p_hsDecl :: FamilyStyle -> HsDecl GhcPs -> R ()
 p_hsDecl style = \case
-  TyClD _ x -> p_tyClDecl style x
-  ValD _ x -> p_valDecl x
-  SigD _ x -> p_sigDecl x
-  InstD _ x -> p_instDecl style x
-  DerivD _ x -> p_standaloneDerivDecl x
-  DefD _ x -> p_defaultDecl x
-  ForD _ x -> p_foreignDecl x
-  WarningD _ x -> p_warnDecls x
-  AnnD _ x -> p_annDecl x
-  RuleD _ x -> p_ruleDecls x
-  SpliceD _ x -> p_spliceDecl x
-  DocD _ docDecl ->
-    case docDecl of
-      DocCommentNext str -> p_hsDoc Pipe (Without #endNewline) str
-      DocCommentPrev str -> p_hsDoc Caret (Without #endNewline) str
-      DocCommentNamed name str -> p_hsDoc (Named name) (Without #endNewline) str
-      DocGroup n str -> p_hsDoc (Asterisk n) (Without #endNewline) str
-  RoleAnnotD _ x -> p_roleAnnot x
-  KindSigD _ s -> p_standaloneKindSig s
+    TyClD _ x -> p_tyClDecl style x
+    ValD _ x -> p_valDecl x
+    SigD _ x -> p_sigDecl x
+    InstD _ x -> p_instDecl style x
+    DerivD _ x -> p_standaloneDerivDecl x
+    DefD _ x -> p_defaultDecl x
+    ForD _ x -> p_foreignDecl x
+    WarningD _ x -> p_warnDecls x
+    AnnD _ x -> p_annDecl x
+    RuleD _ x -> p_ruleDecls x
+    SpliceD _ x -> p_spliceDecl x
+    DocD _ docDecl ->
+        case docDecl of
+            DocCommentNext str -> p_hsDoc Pipe (Without #endNewline) str
+            DocCommentPrev str -> p_hsDoc Caret (Without #endNewline) str
+            DocCommentNamed name str -> p_hsDoc (Named name) (Without #endNewline) str
+            DocGroup n str -> p_hsDoc (Asterisk n) (Without #endNewline) str
+    RoleAnnotD _ x -> p_roleAnnot x
+    KindSigD _ s -> p_standaloneKindSig s
 
 p_tyClDecl :: FamilyStyle -> TyClDecl GhcPs -> R ()
 p_tyClDecl style = \case
-  FamDecl _ x -> p_famDecl style x
-  SynDecl {..} -> p_synDecl tcdLName tcdFixity tcdTyVars tcdRhs
-  DataDecl {..} ->
-    p_dataDecl
-      Associated
-      tcdLName
-      (hsq_explicit tcdTyVars)
-      getLocA
-      (located' p_hsTyVarBndr)
-      tcdFixity
-      tcdDataDefn
-  ClassDecl {..} ->
-    p_classDecl
-      tcdCtxt
-      tcdLName
-      tcdTyVars
-      tcdFixity
-      tcdFDs
-      tcdSigs
-      tcdMeths
-      tcdATs
-      tcdATDefs
-      tcdDocs
+    FamDecl _ x -> p_famDecl style x
+    SynDecl {..} -> p_synDecl tcdLName tcdFixity tcdTyVars tcdRhs
+    DataDecl {..} ->
+        p_dataDecl
+            Associated
+            tcdLName
+            (hsq_explicit tcdTyVars)
+            getLocA
+            (located' p_hsTyVarBndr)
+            tcdFixity
+            tcdDataDefn
+    ClassDecl {..} ->
+        p_classDecl
+            tcdCtxt
+            tcdLName
+            tcdTyVars
+            tcdFixity
+            tcdFDs
+            tcdSigs
+            tcdMeths
+            tcdATs
+            tcdATDefs
+            tcdDocs
 
 p_instDecl :: FamilyStyle -> InstDecl GhcPs -> R ()
 p_instDecl style = \case
-  ClsInstD _ x -> p_clsInstDecl x
-  TyFamInstD _ x -> p_tyFamInstDecl style x
-  DataFamInstD _ x -> p_dataFamInstDecl style x
+    ClsInstD _ x -> p_clsInstDecl x
+    TyFamInstD _ x -> p_tyFamInstDecl style x
+    DataFamInstD _ x -> p_dataFamInstDecl style x
 
 -- | Determine if these declarations should be grouped together.
-groupedDecls ::
-  LHsDecl GhcPs ->
-  LHsDecl GhcPs ->
-  Bool
+groupedDecls
+    :: LHsDecl GhcPs
+    -> LHsDecl GhcPs
+    -> Bool
 groupedDecls (L (locA -> l_x) x') (L (locA -> l_y) y') =
-  case (x', y') of
-    (TypeSignature ns, FunctionBody ns') -> ns `intersects` ns'
-    (TypeSignature ns, DefaultSignature ns') -> ns `intersects` ns'
-    (DefaultSignature ns, TypeSignature ns') -> ns `intersects` ns'
-    (DefaultSignature ns, FunctionBody ns') -> ns `intersects` ns'
-    (x, FunctionBody ns) | Just ns' <- isPragma x -> ns `intersects` ns'
-    (FunctionBody ns, x) | Just ns' <- isPragma x -> ns `intersects` ns'
-    (x, DataDeclaration n) | Just ns <- isPragma x -> n `elem` ns
-    (DataDeclaration n, x)
-      | Just ns <- isPragma x ->
-          let f = occNameFS . rdrNameOcc in f n `elem` map f ns
-    (x, y)
-      | Just ns <- isPragma x,
-        Just ns' <- isPragma y ->
-          ns `intersects` ns'
-    (x, TypeSignature ns) | Just ns' <- isPragma x -> ns `intersects` ns'
-    (TypeSignature ns, x) | Just ns' <- isPragma x -> ns `intersects` ns'
-    (PatternSignature ns, Pattern n) -> n `elem` ns
-    (KindSignature n, DataDeclaration n') -> n == n'
-    (KindSignature n, ClassDeclaration n') -> n == n'
-    (KindSignature n, FamilyDeclaration n') -> n == n'
-    (KindSignature n, TypeSynonym n') -> n == n'
-    -- Special case for TH splices, we look at locations
-    (Splice, Splice) -> not (separatedByBlank id l_x l_y)
-    -- This looks only at Haddocks, normal comments are handled elsewhere
-    (DocNext, _) -> True
-    (_, DocPrev) -> True
-    _ -> False
+    case (x', y') of
+        (TypeSignature ns, FunctionBody ns') -> ns `intersects` ns'
+        (TypeSignature ns, DefaultSignature ns') -> ns `intersects` ns'
+        (DefaultSignature ns, TypeSignature ns') -> ns `intersects` ns'
+        (DefaultSignature ns, FunctionBody ns') -> ns `intersects` ns'
+        (x, FunctionBody ns) | Just ns' <- isPragma x -> ns `intersects` ns'
+        (FunctionBody ns, x) | Just ns' <- isPragma x -> ns `intersects` ns'
+        (x, DataDeclaration n) | Just ns <- isPragma x -> n `elem` ns
+        (DataDeclaration n, x)
+            | Just ns <- isPragma x ->
+                let f = occNameFS . rdrNameOcc in f n `elem` map f ns
+        (x, y)
+            | Just ns <- isPragma x
+            , Just ns' <- isPragma y ->
+                ns `intersects` ns'
+        (x, TypeSignature ns) | Just ns' <- isPragma x -> ns `intersects` ns'
+        (TypeSignature ns, x) | Just ns' <- isPragma x -> ns `intersects` ns'
+        (PatternSignature ns, Pattern n) -> n `elem` ns
+        (KindSignature n, DataDeclaration n') -> n == n'
+        (KindSignature n, ClassDeclaration n') -> n == n'
+        (KindSignature n, FamilyDeclaration n') -> n == n'
+        (KindSignature n, TypeSynonym n') -> n == n'
+        -- Special case for TH splices, we look at locations
+        (Splice, Splice) -> not (separatedByBlank id l_x l_y)
+        -- This looks only at Haddocks, normal comments are handled elsewhere
+        (DocNext, _) -> True
+        (_, DocPrev) -> True
+        _ -> False
 
 -- | Detect declaration series that should not have blanks between them.
-declSeries ::
-  LHsDecl GhcPs ->
-  LHsDecl GhcPs ->
-  Bool
+declSeries
+    :: LHsDecl GhcPs
+    -> LHsDecl GhcPs
+    -> Bool
 declSeries (L _ x) (L _ y) =
-  case (x, y) of
-    ( SigD _ (TypeSig _ _ _),
-      SigD _ (TypeSig _ _ _)
-      ) -> True
-    _ -> False
+    case (x, y) of
+        ( SigD _ (TypeSig _ _ _)
+            , SigD _ (TypeSig _ _ _)
+            ) -> True
+        _ -> False
 
 intersects :: (Ord a) => [a] -> [a] -> Bool
 intersects a b = go (sort a) (sort b)
-  where
-    go :: (Ord a) => [a] -> [a] -> Bool
-    go _ [] = False
-    go [] _ = False
-    go (x : xs) (y : ys)
-      | x < y = go xs (y : ys)
-      | x > y = go (x : xs) ys
-      | otherwise = True
+    where
+        go :: (Ord a) => [a] -> [a] -> Bool
+        go _ [] = False
+        go [] _ = False
+        go (x : xs) (y : ys)
+            | x < y = go xs (y : ys)
+            | x > y = go (x : xs) ys
+            | otherwise = True
 
-isPragma ::
-  HsDecl GhcPs ->
-  Maybe [RdrName]
+isPragma
+    :: HsDecl GhcPs
+    -> Maybe [RdrName]
 isPragma = \case
-  InlinePragma n -> Just [n]
-  SpecializePragma n -> Just [n]
-  SCCPragma n -> Just [n]
-  AnnTypePragma n -> Just [n]
-  AnnValuePragma n -> Just [n]
-  WarningPragma n -> Just n
-  _ -> Nothing
+    InlinePragma n -> Just [n]
+    SpecializePragma n -> Just [n]
+    SCCPragma n -> Just [n]
+    AnnTypePragma n -> Just [n]
+    AnnValuePragma n -> Just [n]
+    WarningPragma n -> Just n
+    _ -> Nothing
 
 -- Declarations that do not refer to names
 
@@ -243,18 +242,18 @@ pattern Splice <- SpliceD _ (SpliceDecl _ _ _)
 -- Declarations referring to a single name
 
 pattern
-  InlinePragma,
-  SpecializePragma,
-  SCCPragma,
-  AnnTypePragma,
-  AnnValuePragma,
-  Pattern,
-  DataDeclaration,
-  ClassDeclaration,
-  KindSignature,
-  FamilyDeclaration,
-  TypeSynonym ::
-    RdrName -> HsDecl GhcPs
+    InlinePragma
+    , SpecializePragma
+    , SCCPragma
+    , AnnTypePragma
+    , AnnValuePragma
+    , Pattern
+    , DataDeclaration
+    , ClassDeclaration
+    , KindSignature
+    , FamilyDeclaration
+    , TypeSynonym
+        :: RdrName -> HsDecl GhcPs
 pattern InlinePragma n <- SigD _ (InlineSig _ (L _ n) _)
 pattern SpecializePragma n <- SigD _ (isSpecSig -> Just n)
 pattern SCCPragma n <- SigD _ (SCCFunSig _ (L _ n) _)
@@ -269,19 +268,19 @@ pattern TypeSynonym n <- TyClD _ (SynDecl _ (L _ n) _ _ _)
 
 isSpecSig :: Sig GhcPs -> Maybe RdrName
 isSpecSig = \case
-  SpecSig _ (L _ n) _ _ -> Just n
-  SpecSigE _ _ (deconstructExprFromSpecSigE -> (L _ n, _, _)) _ -> Just n
-  _ -> Nothing
+    SpecSig _ (L _ n) _ _ -> Just n
+    SpecSigE _ _ (deconstructExprFromSpecSigE -> (L _ n, _, _)) _ -> Just n
+    _ -> Nothing
 
 -- Declarations which can refer to multiple names
 
 pattern
-  TypeSignature,
-  DefaultSignature,
-  FunctionBody,
-  PatternSignature,
-  WarningPragma ::
-    [RdrName] -> HsDecl GhcPs
+    TypeSignature
+    , DefaultSignature
+    , FunctionBody
+    , PatternSignature
+    , WarningPragma
+        :: [RdrName] -> HsDecl GhcPs
 pattern TypeSignature n <- (sigRdrNames -> Just n)
 pattern DefaultSignature n <- (defSigRdrNames -> Just n)
 pattern FunctionBody n <- (funRdrNames -> Just n)
@@ -313,8 +312,8 @@ patSigRdrNames _ = Nothing
 
 warnSigRdrNames :: HsDecl GhcPs -> Maybe [RdrName]
 warnSigRdrNames (WarningD _ (Warnings _ ws)) = Just $
-  flip concatMap ws $
-    \(L _ (Warning _ ns _)) -> map unLoc ns
+    flip concatMap ws $
+        \(L _ (Warning _ ns _)) -> map unLoc ns
 warnSigRdrNames _ = Nothing
 
 patBindNames :: Pat GhcPs -> [RdrName]

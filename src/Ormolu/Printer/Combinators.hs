@@ -5,8 +5,8 @@
 -- | Printing combinators. The definitions here are presented in such an
 -- order so you can just go through the Haddocks and by the end of the file
 -- you should have a pretty good idea how to program rendering logic.
-module Ormolu.Printer.Combinators
-  ( -- * The 'R' monad
+module Ormolu.Printer.Combinators (
+    -- * The 'R' monad
     R,
     runR,
     getEnclosingSpan,
@@ -45,7 +45,6 @@ module Ormolu.Printer.Combinators
     breakpoint,
     breakpoint',
     getPrinterOpt,
-    getLocalModules,
 
     -- ** Formatting lists
     sep,
@@ -99,8 +98,7 @@ module Ormolu.Printer.Combinators
     -- ** Placement
     Placement (..),
     placeHanging,
-  )
-where
+) where
 
 import Control.Monad
 import Data.List (intersperse)
@@ -109,20 +107,20 @@ import GHC.Data.Strict qualified as Strict
 import GHC.LanguageExtensions.Type
 import GHC.Parser.Annotation hiding (IsUnicodeSyntax (..))
 import GHC.Types.SrcLoc hiding (spans)
-import Ormolu.Config
 import Ormolu.Printer.Comments
 import Ormolu.Printer.Internal
+import Ormolu.Style
 
 ----------------------------------------------------------------------------
 -- Basic
 
 -- | Indent the inner expression if the first argument is 'True'.
-inciIf ::
-  -- | Whether to indent
-  Bool ->
-  -- | The expression to indent
-  R () ->
-  R ()
+inciIf
+    :: Bool
+    -- ^ Whether to indent
+    -> R ()
+    -- ^ The expression to indent
+    -> R ()
 inciIf b m = if b then inci m else m
 
 -- | Enter a 'GenLocated' entity. This combinator handles outputting comments
@@ -130,46 +128,46 @@ inciIf b m = if b then inci m else m
 -- Roughly, the rule for using 'located' is that every time there is a
 -- 'Located' wrapper, it should be “discharged” with a corresponding
 -- 'located' invocation.
-located ::
-  (HasLoc l) =>
-  -- | Thing to enter
-  GenLocated l a ->
-  -- | How to render inner value
-  (a -> R ()) ->
-  R ()
+located
+    :: (HasLoc l)
+    => GenLocated l a
+    -- ^ Thing to enter
+    -> (a -> R ())
+    -- ^ How to render inner value
+    -> R ()
 located (L l' a) f = case locA l' of
-  UnhelpfulSpan _ -> f a
-  RealSrcSpan l _ -> do
-    spitPrecedingComments l
-    withEnclosingSpan l $
-      switchLayout [RealSrcSpan l Strict.Nothing] (f a)
-    spitFollowingComments l
+    UnhelpfulSpan _ -> f a
+    RealSrcSpan l _ -> do
+        spitPrecedingComments l
+        withEnclosingSpan l $
+            switchLayout [RealSrcSpan l Strict.Nothing] (f a)
+        spitFollowingComments l
 
 -- | Similar to 'located', but when the "payload" is an empty list, print
 -- virtual elements at the start and end of the source span to prevent comments
 -- from "floating out".
-encloseLocated ::
-  (HasLoc l) =>
-  GenLocated l [a] ->
-  ([a] -> R ()) ->
-  R ()
+encloseLocated
+    :: (HasLoc l)
+    => GenLocated l [a]
+    -> ([a] -> R ())
+    -> R ()
 encloseLocated la f = located la $ \a -> do
-  when (null a) $ located (L startSpan ()) pure
-  f a
-  when (null a) $ located (L endSpan ()) pure
-  where
-    l = locA la
-    (startLoc, endLoc) = (srcSpanStart l, srcSpanEnd l)
-    (startSpan, endSpan) = (mkSrcSpan startLoc startLoc, mkSrcSpan endLoc endLoc)
+    when (null a) $ located (L startSpan ()) pure
+    f a
+    when (null a) $ located (L endSpan ()) pure
+    where
+        l = locA la
+        (startLoc, endLoc) = (srcSpanStart l, srcSpanEnd l)
+        (startSpan, endSpan) = (mkSrcSpan startLoc startLoc, mkSrcSpan endLoc endLoc)
 
 -- | A version of 'located' with arguments flipped.
-located' ::
-  (HasLoc l) =>
-  -- | How to render inner value
-  (a -> R ()) ->
-  -- | Thing to enter
-  GenLocated l a ->
-  R ()
+located'
+    :: (HasLoc l)
+    => (a -> R ())
+    -- ^ How to render inner value
+    -> GenLocated l a
+    -- ^ Thing to enter
+    -> R ()
 located' = flip located
 
 -- | Set layout according to combination of given 'SrcSpan's for a given.
@@ -178,15 +176,15 @@ located' = flip located
 -- provided by GHC AST. It is relatively rare that this one is needed.
 --
 -- Given empty list this function will set layout to single line.
-switchLayout ::
-  -- | Span that controls layout
-  [SrcSpan] ->
-  -- | Computation to run with changed layout
-  R () ->
-  R ()
+switchLayout
+    :: [SrcSpan]
+    -- ^ Span that controls layout
+    -> R ()
+    -- ^ Computation to run with changed layout
+    -> R ()
 switchLayout spans r = do
-  layout <- spansLayout spans
-  enterLayout layout r
+    layout <- spansLayout spans
+    enterLayout layout r
 
 -- | Same as 'switchLayout', except disregards the column limit.
 --
@@ -198,24 +196,24 @@ switchLayoutNoLimit spans = enterLayout (spansLayoutWithLimit NoLimit spans)
 -- | Which layout combined spans result in?
 spansLayout :: [SrcSpan] -> R Layout
 spansLayout spans = do
-  colLimit <- getPrinterOpt poColumnLimit
-  pure $ spansLayoutWithLimit colLimit spans
+    colLimit <- getPrinterOpt poColumnLimit
+    pure $ spansLayoutWithLimit colLimit spans
 
 spansLayoutWithLimit :: ColumnLimit -> [SrcSpan] -> Layout
 spansLayoutWithLimit colLimit = \case
-  [] -> SingleLine
-  (x : xs) ->
-    let combinedSpan = foldr combineSrcSpans x xs
-     in if isOneLineSpan combinedSpan && not (shouldBreakSingleLine combinedSpan)
-          then SingleLine
-          else MultiLine
-  where
-    shouldBreakSingleLine srcSpan =
-      case (srcSpan, colLimit) of
-        (RealSrcSpan rs _, ColumnLimit maxLineLength) ->
-          let spanLineLength = srcSpanEndCol rs - srcSpanStartCol rs
-           in spanLineLength > fromIntegral maxLineLength
-        _ -> False
+    [] -> SingleLine
+    (x : xs) ->
+        let combinedSpan = foldr combineSrcSpans x xs
+         in if isOneLineSpan combinedSpan && not (shouldBreakSingleLine combinedSpan)
+                then SingleLine
+                else MultiLine
+    where
+        shouldBreakSingleLine srcSpan =
+            case (srcSpan, colLimit) of
+                (RealSrcSpan rs _, ColumnLimit maxLineLength) ->
+                    let spanLineLength = srcSpanEndCol rs - srcSpanStartCol rs
+                     in spanLineLength > fromIntegral maxLineLength
+                _ -> False
 
 -- | Insert a space if enclosing layout is single-line, or newline if it's
 -- multiline.
@@ -235,14 +233,14 @@ breakpoint' = vlayout (return ()) newline
 -- Formatting lists
 
 -- | Render a collection of elements inserting a separator between them.
-sep ::
-  -- | Separator
-  R () ->
-  -- | How to render an element
-  (a -> R ()) ->
-  -- | Elements to render
-  [a] ->
-  R ()
+sep
+    :: R ()
+    -- ^ Separator
+    -> (a -> R ())
+    -- ^ How to render an element
+    -> [a]
+    -- ^ Elements to render
+    -> R ()
 sep s f xs = sequence_ (intersperse s (f <$> xs))
 
 -- | Render a collection of elements layout-sensitively using given printer,
@@ -254,12 +252,12 @@ sep s f xs = sequence_ (intersperse s (f <$> xs))
 --
 -- > dontUseBraces $ sepSemi txt ["foo", "bar"]
 -- >   == vlayout (txt "foo; bar") (txt "foo\nbar")
-sepSemi ::
-  -- | How to render an element
-  (a -> R ()) ->
-  -- | Elements to render
-  [a] ->
-  R ()
+sepSemi
+    :: (a -> R ())
+    -- ^ How to render an element
+    -> [a]
+    -- ^ Elements to render
+    -> R ()
 sepSemi = sepSemi' False
 
 -- | A version of 'sepSemi' that allows to control whether semicolons should
@@ -270,52 +268,52 @@ sepSemi = sepSemi' False
 --
 -- > dontUseBraces $ sepSemi' True txt ["foo", "bar"]
 -- >   == vlayout (txt "foo; bar") (txt "foo;\nbar")
-sepSemi' ::
-  -- | Whether to insert semicolons in multi-line layout
-  Bool ->
-  -- | How to render an element
-  (a -> R ()) ->
-  -- | Elements to render
-  [a] ->
-  R ()
+sepSemi'
+    :: Bool
+    -- ^ Whether to insert semicolons in multi-line layout
+    -> (a -> R ())
+    -- ^ How to render an element
+    -> [a]
+    -- ^ Elements to render
+    -> R ()
 sepSemi' addMultiColSemi f xs = vlayout singleLine multiLine
-  where
-    singleLine = do
-      ub <- canUseBraces
-      case xs of
-        [] -> when ub $ txt "{}"
-        xs' ->
-          if ub
-            then do
-              txt "{"
-              space
-              sep (txt ";" >> space) (dontUseBraces . f) xs'
-              space
-              txt "}"
-            else sep (txt ";" >> space) f xs'
-    multiLine =
-      sep
-        (if addMultiColSemi then txt ";" >> newline else newline)
-        (dontUseBraces . f)
-        xs
+    where
+        singleLine = do
+            ub <- canUseBraces
+            case xs of
+                [] -> when ub $ txt "{}"
+                xs' ->
+                    if ub
+                        then do
+                            txt "{"
+                            space
+                            sep (txt ";" >> space) (dontUseBraces . f) xs'
+                            space
+                            txt "}"
+                        else sep (txt ";" >> space) f xs'
+        multiLine =
+            sep
+                (if addMultiColSemi then txt ";" >> newline else newline)
+                (dontUseBraces . f)
+                xs
 
 ----------------------------------------------------------------------------
 -- Wrapping
 
 -- | 'BracketStyle' controlling how closing bracket is rendered.
 data BracketStyle
-  = -- | Normal
-    N
-  | -- | Shifted one level
-    S
-  deriving (Eq, Show)
+    = -- | Normal
+      N
+    | -- | Shifted one level
+      S
+    deriving (Eq, Show)
 
 -- | Surround given entity by backticks.
 backticks :: R () -> R ()
 backticks m = do
-  txt "`"
-  m
-  txt "`"
+    txt "`"
+    m
+    txt "`"
 
 -- | Surround given entity by banana brackets (i.e., from arrow notation.)
 banana :: BracketStyle -> R () -> R ()
@@ -340,84 +338,84 @@ parensHash = brackets_ True (txt "(#") (txt "#)")
 -- | Braces as used for pragmas: @{\-#@ and @#-\}@.
 pragmaBraces :: R () -> R ()
 pragmaBraces m = sitcc $ do
-  txt "{-#"
-  space
-  m
-  breakpoint
-  inci (txt "#-}")
+    txt "{-#"
+    space
+    m
+    breakpoint
+    inci (txt "#-}")
 
 -- | Surround the body with a pragma name and 'pragmaBraces'.
-pragma ::
-  -- | Pragma text
-  Text ->
-  -- | Pragma body
-  R () ->
-  R ()
+pragma
+    :: Text
+    -- ^ Pragma text
+    -> R ()
+    -- ^ Pragma body
+    -> R ()
 pragma pragmaText body = pragmaBraces $ do
-  txt pragmaText
-  breakpoint
-  body
+    txt pragmaText
+    breakpoint
+    body
 
 -- | A helper for defining wrappers like 'parens' and 'braces'.
-brackets_ ::
-  -- | Insert breakpoints around brackets
-  Bool ->
-  -- | Opening bracket
-  R () ->
-  -- | Closing bracket
-  R () ->
-  -- | Bracket style
-  BracketStyle ->
-  -- | Inner expression
-  R () ->
-  R ()
+brackets_
+    :: Bool
+    -- ^ Insert breakpoints around brackets
+    -> R ()
+    -- ^ Opening bracket
+    -> R ()
+    -- ^ Closing bracket
+    -> BracketStyle
+    -- ^ Bracket style
+    -> R ()
+    -- ^ Inner expression
+    -> R ()
 brackets_ needBreaks open close style m = sitcc (vlayout singleLine multiLine)
-  where
-    singleLine = do
-      open
-      when needBreaks space
-      m
-      when needBreaks space
-      close
-    multiLine = do
-      open
-      commaStyle <- getPrinterOpt poCommaStyle
-      case commaStyle of
-        Leading ->
-          if needBreaks
-            then inci $ newline >> m
-            else inciIf (style == S) $ space >> m
-        Trailing ->
-          if needBreaks
-            then newline >> inci m
-            else space >> sitcc m
-      newline
-      inciIf (style == S) close
+    where
+        singleLine = do
+            open
+            when needBreaks space
+            m
+            when needBreaks space
+            close
+        multiLine = do
+            open
+            commaStyle <- getPrinterOpt poCommaStyle
+            case commaStyle of
+                Leading ->
+                    if needBreaks
+                        then inci $ newline >> m
+                        else inciIf (style == S) $ space >> m
+                Trailing ->
+                    if needBreaks
+                        then newline >> inci m
+                        else space >> sitcc m
+            newline
+            inciIf (style == S) close
 
 -- With leading commas align the close brace with commas
 -- otherwise move the close brace back to the left
 recordBraces :: R () -> R ()
 recordBraces m = do
-  commaStyle <- getPrinterOpt poCommaStyle
-  recordBraces_ (commaStyle == Trailing) m
+    commaStyle <- getPrinterOpt poCommaStyle
+    recordBraces_ (commaStyle == Trailing) m
 
 recordBraces_ :: Bool -> R () -> R ()
 recordBraces_ moveBraceBack m = do
-  style <- getPrinterOpt poRecordStyle
-  case style of
-    RecordStyleAligned -> braces N m
-    RecordStyleKnr ->
-      vlayout
-        (txt "{" >> m >> txt "}")
-        ( do
-            txt "{"
-            newline
-            sitcc m
-            newline
-            if moveBraceBack
-              then inciByFrac (-1) (txt "}")
-              else txt "}"
-        )
+    style <- getPrinterOpt poRecordStyle
+    case style of
+        RecordStyleAligned -> braces N m
+        RecordStyleKnr ->
+            vlayout
+                (txt "{" >> m >> txt "}")
+                ( do
+                    txt "{"
+                    newline
+                    sitcc m
+                    newline
+                    if moveBraceBack
+                        then inciByFrac (-1) (txt "}")
+                        else txt "}"
+                )
 
 ----------------------------------------------------------------------------
 -- Literals
@@ -434,15 +432,15 @@ commaDel = getPrinterOpt poCommaStyle >>= commaDel'
 -- To be used with `sep`.
 commaDelImportExport :: R ()
 commaDelImportExport =
-  getPrinterOpt poImportExportStyle >>= \case
-    ImportExportLeading -> commaDel' Leading
-    ImportExportTrailing -> commaDel' Trailing
-    ImportExportDiffFriendly -> commaDel' Trailing
+    getPrinterOpt poImportExportStyle >>= \case
+        ImportExportLeading -> commaDel' Leading
+        ImportExportTrailing -> commaDel' Trailing
+        ImportExportDiffFriendly -> commaDel' Trailing
 
 commaDel' :: CommaStyle -> R ()
 commaDel' = \case
-  Leading -> breakpoint' >> comma >> space
-  Trailing -> comma >> breakpoint
+    Leading -> breakpoint' >> comma >> space
+    Trailing -> comma >> breakpoint
 
 -- | Print @=@. Do not use @'txt' "="@.
 equals :: R ()
@@ -516,12 +514,12 @@ token'lolly = "⊸" `whenUnicodeOtherwise` "%1 ->"
 -- | Write the one text or the other depending on whether Unicode is enabled.
 whenUnicodeOtherwise :: Text -> Text -> R ()
 unicodeText `whenUnicodeOtherwise` asciiText = do
-  unicodePrinterOption <- getPrinterOpt poUnicode
-  unicodeExtensionIsEnabled <- isExtensionEnabled UnicodeSyntax
-  txt $ case unicodePrinterOption of
-    UnicodeDetect -> if unicodeExtensionIsEnabled then unicodeText else asciiText
-    UnicodeAlways -> unicodeText
-    UnicodeNever -> asciiText
+    unicodePrinterOption <- getPrinterOpt poUnicode
+    unicodeExtensionIsEnabled <- isExtensionEnabled UnicodeSyntax
+    txt $ case unicodePrinterOption of
+        UnicodeDetect -> if unicodeExtensionIsEnabled then unicodeText else asciiText
+        UnicodeAlways -> unicodeText
+        UnicodeNever -> asciiText
 
 ----------------------------------------------------------------------------
 -- Placement
@@ -529,25 +527,25 @@ unicodeText `whenUnicodeOtherwise` asciiText = do
 -- | Expression placement. This marks the places where expressions that
 -- implement handing forms may use them.
 data Placement
-  = -- | Multi-line layout should cause
-    -- insertion of a newline and indentation
-    -- bump
-    Normal
-  | -- | Expressions that have hanging form
-    -- should use it and avoid bumping one level
-    -- of indentation
-    Hanging
-  deriving (Eq, Show)
+    = -- | Multi-line layout should cause
+      -- insertion of a newline and indentation
+      -- bump
+      Normal
+    | -- | Expressions that have hanging form
+      -- should use it and avoid bumping one level
+      -- of indentation
+      Hanging
+    deriving (Eq, Show)
 
 -- | Place a thing that may have a hanging form. This function handles how
 -- to separate it from preceding expressions and whether to bump indentation
 -- depending on what sort of expression we have.
 placeHanging :: Placement -> R () -> R ()
 placeHanging placement m =
-  case placement of
-    Hanging -> do
-      space
-      m
-    Normal -> do
-      breakpoint
-      inci m
+    case placement of
+        Hanging -> do
+            space
+            m
+        Normal -> do
+            breakpoint
+            inci m

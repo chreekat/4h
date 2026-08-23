@@ -4,10 +4,9 @@
 {-# LANGUAGE RecordWildCards #-}
 
 -- | Preprocessing for input source code.
-module Ormolu.Processing.Preprocess
-  ( preprocess,
-  )
-where
+module Ormolu.Processing.Preprocess (
+    preprocess,
+) where
 
 import Control.Monad
 import Data.Array as A
@@ -30,124 +29,124 @@ import Ormolu.Processing.Cpp
 
 -- | Preprocess the specified region of the input into raw snippets
 -- and subregions to be formatted.
-preprocess ::
-  -- | Whether CPP is enabled
-  Choice "cppEnabled" ->
-  RegionDeltas ->
-  Text ->
-  [Either Text RegionDeltas]
+preprocess
+    :: Choice "cppEnabled"
+    -- ^ Whether CPP is enabled
+    -> RegionDeltas
+    -> Text
+    -> [Either Text RegionDeltas]
 preprocess cppEnabled region rawInput = rawSnippetsAndRegionsToFormat
-  where
-    (linesNotToFormat', replacementLines) =
-      linesNotToFormat cppEnabled region rawInput
-    regionsToFormat =
-      intSetToRegions rawLineLength $
-        IntSet.fromAscList [1 .. rawLineLength] IntSet.\\ linesNotToFormat'
-    regionsNotToFormat = intSetToRegions rawLineLength linesNotToFormat'
-    -- We want to interleave the regionsToFormat and regionsNotToFormat.
-    -- If the first non-formattable region starts at the first line, it is
-    -- the first interleaved region, otherwise, we start with the first
-    -- region to format.
-    interleave' = case regionsNotToFormat of
-      r : _ | regionPrefixLength r == 0 -> interleave
-      _ -> flip interleave
-    rawSnippets = flip linesInRegion updatedInput <$> regionsNotToFormat
-      where
-        updatedInput = T.unlines . fmap updateLine . zip [1 ..] . T.lines $ rawInput
-        updateLine (i, line) = IntMap.findWithDefault line i replacementLines
-    rawSnippetsAndRegionsToFormat =
-      interleave' (Left <$> rawSnippets) (Right <$> regionsToFormat)
-        >>= patchSeparatingBlankLines
-        & dropWhile isBlankRawSnippet
-        & L.dropWhileEnd isBlankRawSnippet
-    -- For every formattable region, we want to ensure that it is separated by
-    -- a blank line from preceding/succeeding raw snippets if it starts/ends
-    -- with a blank line.
-    -- Empty formattable regions are replaced by a blank line instead.
-    -- Extraneous raw snippets at the start/end are dropped afterwards.
-    patchSeparatingBlankLines = \case
-      Right r@RegionDeltas {..} ->
-        if T.all isSpace (linesInRegion r rawInput)
-          then [blankRawSnippet]
-          else
-            [blankRawSnippet | isBlankLine regionPrefixLength]
-              <> [Right r]
-              <> [blankRawSnippet | isBlankLine (rawLineLength - regionSuffixLength - 1)]
-      Left r -> [Left r]
-      where
-        blankRawSnippet = Left "\n"
-        isBlankLine i = isJust . mfilter (T.all isSpace) $ rawLines !!? i
-    isBlankRawSnippet = \case
-      Left r | T.all isSpace r -> True
-      _ -> False
+    where
+        (linesNotToFormat', replacementLines) =
+            linesNotToFormat cppEnabled region rawInput
+        regionsToFormat =
+            intSetToRegions rawLineLength $
+                IntSet.fromAscList [1 .. rawLineLength] IntSet.\\ linesNotToFormat'
+        regionsNotToFormat = intSetToRegions rawLineLength linesNotToFormat'
+        -- We want to interleave the regionsToFormat and regionsNotToFormat.
+        -- If the first non-formattable region starts at the first line, it is
+        -- the first interleaved region, otherwise, we start with the first
+        -- region to format.
+        interleave' = case regionsNotToFormat of
+            r : _ | regionPrefixLength r == 0 -> interleave
+            _ -> flip interleave
+        rawSnippets = flip linesInRegion updatedInput <$> regionsNotToFormat
+            where
+                updatedInput = T.unlines . fmap updateLine . zip [1 ..] . T.lines $ rawInput
+                updateLine (i, line) = IntMap.findWithDefault line i replacementLines
+        rawSnippetsAndRegionsToFormat =
+            interleave' (Left <$> rawSnippets) (Right <$> regionsToFormat)
+                >>= patchSeparatingBlankLines
+                & dropWhile isBlankRawSnippet
+                & L.dropWhileEnd isBlankRawSnippet
+        -- For every formattable region, we want to ensure that it is separated by
+        -- a blank line from preceding/succeeding raw snippets if it starts/ends
+        -- with a blank line.
+        -- Empty formattable regions are replaced by a blank line instead.
+        -- Extraneous raw snippets at the start/end are dropped afterwards.
+        patchSeparatingBlankLines = \case
+            Right r@RegionDeltas {..} ->
+                if T.all isSpace (linesInRegion r rawInput)
+                    then [blankRawSnippet]
+                    else
+                        [blankRawSnippet | isBlankLine regionPrefixLength]
+                            <> [Right r]
+                            <> [blankRawSnippet | isBlankLine (rawLineLength - regionSuffixLength - 1)]
+            Left r -> [Left r]
+            where
+                blankRawSnippet = Left "\n"
+                isBlankLine i = isJust . mfilter (T.all isSpace) $ rawLines !!? i
+        isBlankRawSnippet = \case
+            Left r | T.all isSpace r -> True
+            _ -> False
 
-    rawLines = A.listArray (0, length rawLines' - 1) rawLines'
-      where
-        rawLines' = T.lines rawInput
-    rawLineLength = length rawLines
+        rawLines = A.listArray (0, length rawLines' - 1) rawLines'
+            where
+                rawLines' = T.lines rawInput
+        rawLineLength = length rawLines
 
-    interleave [] bs = bs
-    interleave (a : as) bs = a : interleave bs as
+        interleave [] bs = bs
+        interleave (a : as) bs = a : interleave bs as
 
-    xs !!? i = if A.bounds xs `A.inRange` i then Just $ xs A.! i else Nothing
+        xs !!? i = if A.bounds xs `A.inRange` i then Just $ xs A.! i else Nothing
 
 -- | All lines we are not supposed to format, and a set of replacements
 -- for specific lines.
-linesNotToFormat ::
-  -- | Whether CPP is enabled
-  Choice "cppEnabled" ->
-  RegionDeltas ->
-  Text ->
-  (IntSet, IntMap Text)
+linesNotToFormat
+    :: Choice "cppEnabled"
+    -- ^ Whether CPP is enabled
+    -> RegionDeltas
+    -> Text
+    -> (IntSet, IntMap Text)
 linesNotToFormat cppEnabled region@RegionDeltas {..} input =
-  (unconsidered <> magicDisabled <> otherDisabled, lineUpdates)
-  where
-    unconsidered =
-      IntSet.fromAscList $
-        [1 .. regionPrefixLength]
-          <> [totalLines - regionSuffixLength + 1 .. totalLines]
-    totalLines = length (T.lines input)
-    regionLines = linesInRegion region input
-    (magicDisabled, lineUpdates) = magicDisabledLines regionLines
-    otherDisabled = mconcat allLines regionLines
-      where
-        allLines =
-          [shebangLines, linePragmaLines]
-            <> [cppLines | Choice.isTrue cppEnabled]
+    (unconsidered <> magicDisabled <> otherDisabled, lineUpdates)
+    where
+        unconsidered =
+            IntSet.fromAscList $
+                [1 .. regionPrefixLength]
+                    <> [totalLines - regionSuffixLength + 1 .. totalLines]
+        totalLines = length (T.lines input)
+        regionLines = linesInRegion region input
+        (magicDisabled, lineUpdates) = magicDisabledLines regionLines
+        otherDisabled = mconcat allLines regionLines
+            where
+                allLines =
+                    [shebangLines, linePragmaLines]
+                        <> [cppLines | Choice.isTrue cppEnabled]
 
 -- | Ormolu state.
 data OrmoluState
-  = -- | Enabled
-    OrmoluEnabled
-  | -- | Disabled
-    OrmoluDisabled
-  deriving (Eq, Show)
+    = -- | Enabled
+      OrmoluEnabled
+    | -- | Disabled
+      OrmoluDisabled
+    deriving (Eq, Show)
 
 -- | All lines which are disabled by Ormolu's magic comments,
 -- as well as normalizing replacements.
 magicDisabledLines :: Text -> (IntSet, IntMap Text)
 magicDisabledLines input =
-  bimap IntSet.fromAscList IntMap.fromAscList . mconcat $
-    go OrmoluEnabled (T.lines input `zip` [1 ..])
-  where
-    go _ [] = []
-    go state ((line, i) : ls)
-      | Just marker <- disablingMagicComment line,
-        state == OrmoluEnabled =
-          ([i], [(i, marker)]) : go OrmoluDisabled ls
-      | Just marker <- enablingMagicComment line,
-        state == OrmoluDisabled =
-          ([i], [(i, marker)]) : go OrmoluEnabled ls
-      | otherwise = iIfDisabled : go state ls
-      where
-        iIfDisabled = case state of
-          OrmoluDisabled -> ([i], [])
-          OrmoluEnabled -> ([], [])
+    bimap IntSet.fromAscList IntMap.fromAscList . mconcat $
+        go OrmoluEnabled (T.lines input `zip` [1 ..])
+    where
+        go _ [] = []
+        go state ((line, i) : ls)
+            | Just marker <- disablingMagicComment line
+            , state == OrmoluEnabled =
+                ([i], [(i, marker)]) : go OrmoluDisabled ls
+            | Just marker <- enablingMagicComment line
+            , state == OrmoluDisabled =
+                ([i], [(i, marker)]) : go OrmoluEnabled ls
+            | otherwise = iIfDisabled : go state ls
+            where
+                iIfDisabled = case state of
+                    OrmoluDisabled -> ([i], [])
+                    OrmoluEnabled -> ([], [])
 
 -- | All lines which satisfy a predicate.
 linesFiltered :: (Text -> Bool) -> Text -> IntSet
 linesFiltered p =
-  IntSet.fromAscList . fmap snd . filter (p . fst) . (`zip` [1 ..]) . T.lines
+    IntSet.fromAscList . fmap snd . filter (p . fst) . (`zip` [1 ..]) . T.lines
 
 -- | Lines which contain a shebang.
 shebangLines :: Text -> IntSet
@@ -161,27 +160,27 @@ linePragmaLines = linesFiltered ("{-# LINE" `T.isPrefixOf`)
 -- return 'Just' the enabling marker + rest of the string. Otherwise return 'Nothing'.
 enablingMagicComment :: Text -> Maybe Text
 enablingMagicComment s
-  | Just rest <- isMagicComment "ORMOLU_ENABLE" s = Just $ "{- ORMOLU_ENABLE -}" <> rest
-  | Just rest <- isMagicComment "FOURMOLU_ENABLE" s = Just $ "{- FOURMOLU_ENABLE -}" <> rest
-  | otherwise = Nothing
+    | Just rest <- isMagicComment "ORMOLU_ENABLE" s = Just $ "{- ORMOLU_ENABLE -}" <> rest
+    | Just rest <- isMagicComment "FOURMOLU_ENABLE" s = Just $ "{- FOURMOLU_ENABLE -}" <> rest
+    | otherwise = Nothing
 
 -- | If the given string is a disabling marker (Ormolu or Fourmolu style), then
 -- return 'Just' the disabling marker + rest of the string. Otherwise return 'Nothing'.
 disablingMagicComment :: Text -> Maybe Text
 disablingMagicComment s
-  | Just rest <- isMagicComment "ORMOLU_DISABLE" s = Just $ "{- ORMOLU_DISABLE -}" <> rest
-  | Just rest <- isMagicComment "FOURMOLU_DISABLE" s = Just $ "{- FOURMOLU_DISABLE -}" <> rest
-  | otherwise = Nothing
+    | Just rest <- isMagicComment "ORMOLU_DISABLE" s = Just $ "{- ORMOLU_DISABLE -}" <> rest
+    | Just rest <- isMagicComment "FOURMOLU_DISABLE" s = Just $ "{- FOURMOLU_DISABLE -}" <> rest
+    | otherwise = Nothing
 
 -- | Construct a function for whitespace-insensitive matching of string.
-isMagicComment ::
-  -- | What to expect
-  Text ->
-  -- | String to test
-  Text ->
-  -- | If the two strings match, we return the rest of the line.
-  Maybe Text
+isMagicComment
+    :: Text
+    -- ^ What to expect
+    -> Text
+    -- ^ String to test
+    -> Maybe Text
+    -- ^ If the two strings match, we return the rest of the line.
 isMagicComment expected s0 = do
-  s1 <- T.stripStart <$> T.stripPrefix "{-" (T.stripStart s0)
-  s2 <- T.stripStart <$> T.stripPrefix expected s1
-  T.stripPrefix "-}" s2
+    s1 <- T.stripStart <$> T.stripPrefix "{-" (T.stripStart s0)
+    s2 <- T.stripStart <$> T.stripPrefix expected s1
+    T.stripPrefix "-}" s2

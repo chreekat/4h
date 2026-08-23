@@ -6,8 +6,8 @@
 -- functions are the low-level building blocks and should not be used on
 -- their own. The 'R' monad is re-exported from "Ormolu.Printer.Combinators"
 -- as well.
-module Ormolu.Printer.Internal
-  ( -- * The 'R' monad
+module Ormolu.Printer.Internal (
+    -- * The 'R' monad
     R,
     runR,
 
@@ -34,7 +34,6 @@ module Ormolu.Printer.Internal
     vlayout,
     getLayout,
     getPrinterOpt,
-    getLocalModules,
 
     -- * Helpers for braces
     useBraces,
@@ -62,8 +61,7 @@ module Ormolu.Printer.Internal
 
     -- * Extensions
     isExtensionEnabled,
-  )
-where
+) where
 
 import Control.Monad
 import Control.Monad.Reader
@@ -73,15 +71,12 @@ import Data.Char (isSpace)
 import Data.Choice (Choice)
 import Data.Coerce
 import Data.Functor ((<&>))
-import Data.Functor.Identity (runIdentity)
 import Data.List (find)
 import Data.Maybe (listToMaybe)
-import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder
-import Distribution.ModuleName (ModuleName)
 import GHC.Data.EnumSet (EnumSet)
 import GHC.Data.EnumSet qualified as EnumSet
 import GHC.LanguageExtensions.Type
@@ -91,6 +86,7 @@ import Ormolu.Config
 import Ormolu.Fixity (ModuleFixityMap)
 import Ormolu.Parser.CommentStream
 import Ormolu.Printer.SpanStream
+import Ormolu.Style
 import Ormolu.Utils (showOutputable)
 
 ----------------------------------------------------------------------------
@@ -99,133 +95,127 @@ import Ormolu.Utils (showOutputable)
 -- | The 'R' monad hosts combinators that allow us to describe how to render
 -- AST.
 newtype R a = R (ReaderT RC (State SC) a)
-  deriving (Functor, Applicative, Monad)
+    deriving (Applicative, Functor, Monad)
 
 -- | Reader context of 'R'. This should be used when we control rendering by
 -- enclosing certain expressions with wrappers.
 data RC = RC
-  { -- | Indentation level, as the column index we need to start from after
+    { rcIndent :: !Int
+    -- ^ Indentation level, as the column index we need to start from after
     -- a newline if we break lines
-    rcIndent :: !Int,
-    -- | Current layout
-    rcLayout :: Layout,
-    -- | Spans of enclosing elements of AST
-    rcEnclosingSpans :: [RealSrcSpan],
-    -- | Whether the last expression in the layout can use braces
-    rcCanUseBraces :: Bool,
-    rcPrinterOpts :: PrinterOptsTotal,
-    rcLocalModules :: Set ModuleName,
-    -- | Enabled extensions
-    rcExtensions :: EnumSet Extension,
-    -- | Whether the source is a signature or a regular module
-    rcSourceType :: SourceType,
-    -- | Module fixity map
-    rcModuleFixityMap :: ModuleFixityMap,
-    -- | Whether to print out debug information during printing
-    rcDebug :: !(Choice "debug")
-  }
+    , rcLayout :: Layout
+    -- ^ Current layout
+    , rcEnclosingSpans :: [RealSrcSpan]
+    -- ^ Spans of enclosing elements of AST
+    , rcCanUseBraces :: Bool
+    -- ^ Whether the last expression in the layout can use braces
+    , rcExtensions :: EnumSet Extension
+    -- ^ Enabled extensions
+    , rcSourceType :: SourceType
+    -- ^ Whether the source is a signature or a regular module
+    , rcModuleFixityMap :: ModuleFixityMap
+    -- ^ Module fixity map
+    , rcDebug :: !(Choice "debug")
+    -- ^ Whether to print out debug information during printing
+    }
 
 -- | State context of 'R'.
 data SC = SC
-  { -- | Index of the next column to render
-    scColumn :: !Int,
-    -- | Indentation level that was used for the current line
-    scIndent :: !Int,
-    -- | Rendered source code so far
-    scBuilder :: Builder,
-    -- | Span stream
-    scSpanStream :: SpanStream,
-    -- | Spans of atoms that have been printed on the current line so far
-    scThisLineSpans :: [RealSrcSpan],
-    -- | Comment stream
-    scCommentStream :: CommentStream,
-    -- | Pending comment lines (in reverse order) to be inserted before next
+    { scColumn :: !Int
+    -- ^ Index of the next column to render
+    , scIndent :: !Int
+    -- ^ Indentation level that was used for the current line
+    , scBuilder :: Builder
+    -- ^ Rendered source code so far
+    , scSpanStream :: SpanStream
+    -- ^ Span stream
+    , scThisLineSpans :: [RealSrcSpan]
+    -- ^ Spans of atoms that have been printed on the current line so far
+    , scCommentStream :: CommentStream
+    -- ^ Comment stream
+    , scPendingComments :: ![(CommentPosition, Text)]
+    -- ^ Pending comment lines (in reverse order) to be inserted before next
     -- newline, 'Int' is the indentation level
-    scPendingComments :: ![(CommentPosition, Text)],
-    -- | Whether to output a space before the next output
-    scRequestedDelimiter :: !RequestedDelimiter,
-    -- | An auxiliary marker for keeping track of last output element
-    scSpanMark :: !(Maybe SpanMark)
-  }
+    , scRequestedDelimiter :: !RequestedDelimiter
+    -- ^ Whether to output a space before the next output
+    , scSpanMark :: !(Maybe SpanMark)
+    -- ^ An auxiliary marker for keeping track of last output element
+    }
 
 -- | Make sure next output is delimited by one of the following.
 data RequestedDelimiter
-  = -- | A space
-    RequestedSpace
-  | -- | A newline
-    RequestedNewline
-  | -- | Nothing
-    RequestedNothing
-  | -- | We just output a newline
-    AfterNewline
-  | -- | We haven't printed anything yet
-    VeryBeginning
-  deriving (Eq, Show)
+    = -- | A space
+      RequestedSpace
+    | -- | A newline
+      RequestedNewline
+    | -- | Nothing
+      RequestedNothing
+    | -- | We just output a newline
+      AfterNewline
+    | -- | We haven't printed anything yet
+      VeryBeginning
+    deriving (Eq, Show)
 
 -- | 'Layout' options.
 data Layout
-  = -- | Put everything on single line
-    SingleLine
-  | -- | Use multiple lines
-    MultiLine
-  deriving (Eq, Show)
+    = -- | Put everything on single line
+      SingleLine
+    | -- | Use multiple lines
+      MultiLine
+    deriving (Eq, Show)
 
 -- | Modes for rendering of pending comments.
 data CommentPosition
-  = -- | Put the comment on the same line
-    OnTheSameLine
-  | -- | Put the comment on next line
-    OnNextLine
-  deriving (Eq, Show)
+    = -- | Put the comment on the same line
+      OnTheSameLine
+    | -- | Put the comment on next line
+      OnNextLine
+    deriving (Eq, Show)
 
 -- | Run 'R' monad.
-runR ::
-  -- | Monad to run
-  R () ->
-  -- | Span stream
-  SpanStream ->
-  -- | Comment stream
-  CommentStream ->
-  PrinterOptsTotal ->
-  Set ModuleName ->
-  -- | Whether the source is a signature or a regular module
-  SourceType ->
-  -- | Enabled extensions
-  EnumSet Extension ->
-  -- | Module fixity map
-  ModuleFixityMap ->
-  -- | Whether to print out debug information during printing
-  Choice "debug" ->
-  -- | Resulting rendition
-  Text
-runR (R m) sstream cstream printerOpts localModules sourceType extensions moduleFixityMap debug =
-  TL.toStrict . toLazyText . scBuilder $ execState (runReaderT m rc) sc
-  where
-    rc =
-      RC
-        { rcIndent = 0,
-          rcLayout = MultiLine,
-          rcEnclosingSpans = [],
-          rcCanUseBraces = False,
-          rcPrinterOpts = printerOpts,
-          rcLocalModules = localModules,
-          rcExtensions = extensions,
-          rcSourceType = sourceType,
-          rcModuleFixityMap = moduleFixityMap,
-          rcDebug = debug
-        }
-    sc =
-      SC
-        { scColumn = 0,
-          scIndent = 0,
-          scBuilder = mempty,
-          scSpanStream = sstream,
-          scThisLineSpans = [],
-          scCommentStream = cstream,
-          scPendingComments = [],
-          scRequestedDelimiter = VeryBeginning,
-          scSpanMark = Nothing
-        }
+runR
+    :: R ()
+    -- ^ Monad to run
+    -> SpanStream
+    -- ^ Span stream
+    -> CommentStream
+    -- ^ Comment stream
+    -> SourceType
+    -- ^ Whether the source is a signature or a regular module
+    -> EnumSet Extension
+    -- ^ Enabled extensions
+    -> ModuleFixityMap
+    -- ^ Module fixity map
+    -> Choice "debug"
+    -- ^ Whether to print out debug information during printing
+    -> Text
+    -- ^ Resulting rendition
+runR (R m) sstream cstream sourceType extensions moduleFixityMap debug =
+    TL.toStrict . toLazyText . scBuilder $ execState (runReaderT m rc) sc
+    where
+        rc =
+            RC
+                { rcIndent = 0
+                , rcLayout = MultiLine
+                , rcEnclosingSpans = []
+                , rcCanUseBraces = False
+                , rcExtensions = extensions
+                , rcSourceType = sourceType
+                , rcModuleFixityMap = moduleFixityMap
+                , rcDebug = debug
+                }
+        sc =
+            SC
+                { scColumn = 0
+                , scIndent = 0
+                , scBuilder = mempty
+                , scSpanStream = sstream
+                , scThisLineSpans = []
+                , scCommentStream = cstream
+                , scPendingComments = []
+                , scRequestedDelimiter = VeryBeginning
+                , scSpanMark = Nothing
+                }
 
 ----------------------------------------------------------------------------
 -- Internal functions
@@ -233,19 +223,19 @@ runR (R m) sstream cstream printerOpts localModules sourceType extensions module
 -- | Type of the thing to output. Influences the primary low-level rendering
 -- function 'spit'.
 data SpitType
-  = -- | Simple opaque text that breaks comment series.
-    SimpleText
-  | -- | Like 'SimpleText', but assume that when this text is inserted it
-    -- will separate an 'Atom' and its pending comments, so insert an extra
-    -- 'newline' in that case to force the pending comments and continue on
-    -- a fresh line.
-    InterferingText
-  | -- | An atom that typically have span information in the AST and can
-    -- have comments attached to it.
-    Atom
-  | -- | Used for rendering comment lines.
-    CommentPart
-  deriving (Show, Eq)
+    = -- | Simple opaque text that breaks comment series.
+      SimpleText
+    | -- | Like 'SimpleText', but assume that when this text is inserted it
+      -- will separate an 'Atom' and its pending comments, so insert an extra
+      -- 'newline' in that case to force the pending comments and continue on
+      -- a fresh line.
+      InterferingText
+    | -- | An atom that typically have span information in the AST and can
+      -- have comments attached to it.
+      Atom
+    | -- | Used for rendering comment lines.
+      CommentPart
+    deriving (Eq, Show)
 
 -- | Output a fixed 'Text' fragment. The argument may not contain any line
 -- breaks. 'txt' is used to output all sorts of “fixed” bits of syntax like
@@ -254,10 +244,10 @@ data SpitType
 -- To separate various bits of syntax with white space use 'space' instead
 -- of @'txt' " "@. To output 'Outputable' Haskell entities like numbers use
 -- 'atom'.
-txt ::
-  -- | 'Text' to output
-  Text ->
-  R ()
+txt
+    :: Text
+    -- ^ 'Text' to output
+    -> R ()
 txt = spit SimpleText
 
 -- | Same as 'txt', except strip leading whitespace equal to the current
@@ -265,82 +255,82 @@ txt = spit SimpleText
 -- the full leading whitespace.
 txtStripIndent :: Text -> R ()
 txtStripIndent s = do
-  indent <- R (asks rcIndent)
-  let (leadingSpaces, s') = T.span isSpace s
-  txt $ T.drop indent leadingSpaces <> s'
+    indent <- R (asks rcIndent)
+    let (leadingSpaces, s') = T.span isSpace s
+    txt $ T.drop indent leadingSpaces <> s'
 
 -- | Similar to 'txt' but the text inserted this way is assumed to break the
 -- “link” between the preceding atom and its pending comments.
-interferingTxt ::
-  -- | 'Text' to output
-  Text ->
-  R ()
+interferingTxt
+    :: Text
+    -- ^ 'Text' to output
+    -> R ()
 interferingTxt = spit InterferingText
 
 -- | Output 'Outputable' fragment of AST. This can be used to output numeric
 -- literals and similar. Everything that doesn't have inner structure but
 -- does have an 'Outputable' instance.
-atom ::
-  (Outputable a) =>
-  a ->
-  R ()
+atom
+    :: (Outputable a)
+    => a
+    -> R ()
 atom = spit Atom . T.pack . showOutputable
 
 -- | Low-level non-public helper to define 'txt' and 'atom'.
-spit ::
-  -- | Type of the thing to spit
-  SpitType ->
-  -- | 'Text' to output
-  Text ->
-  R ()
+spit
+    :: SpitType
+    -- ^ Type of the thing to spit
+    -> Text
+    -- ^ 'Text' to output
+    -> R ()
 spit _ "" = return ()
 spit stype text = do
-  requestedDel <- R (gets scRequestedDelimiter)
-  pendingComments <- R (gets scPendingComments)
-  when (stype == InterferingText && not (null pendingComments)) newline
-  case requestedDel of
-    RequestedNewline -> do
-      R . modify $ \sc ->
-        sc
-          { scRequestedDelimiter = RequestedNothing
-          }
-      case stype of
-        CommentPart -> newlineRaw
-        _ -> newline
-    _ -> return ()
-  R $ do
-    i <- asks rcIndent
-    c <- gets scColumn
-    closestEnclosing <- asks (listToMaybe . rcEnclosingSpans)
-    let indentedTxt = spaces <> text
-        spaces = T.replicate spacesN " "
-        spacesN =
-          if c == 0
-            then i
-            else bool 0 1 (requestedDel == RequestedSpace)
-    modify $ \sc ->
-      sc
-        { scBuilder = scBuilder sc <> fromText indentedTxt,
-          scColumn = scColumn sc + T.length indentedTxt,
-          scIndent =
-            if c == 0
-              then i
-              else scIndent sc,
-          scThisLineSpans =
-            let xs = scThisLineSpans sc
-             in case stype of
-                  Atom -> case closestEnclosing of
-                    Nothing -> xs
-                    Just x -> x : xs
-                  _ -> xs,
-          scRequestedDelimiter = RequestedNothing,
-          scSpanMark =
-            -- If there are pending comments, do not reset last comment
-            -- location.
-            if (stype == CommentPart) || (not . null . scPendingComments) sc
-              then scSpanMark sc
-              else Nothing
-        }
+    requestedDel <- R (gets scRequestedDelimiter)
+    pendingComments <- R (gets scPendingComments)
+    when (stype == InterferingText && not (null pendingComments)) newline
+    case requestedDel of
+        RequestedNewline -> do
+            R . modify $ \sc ->
+                sc
+                    { scRequestedDelimiter = RequestedNothing
+                    }
+            case stype of
+                CommentPart -> newlineRaw
+                _ -> newline
+        _ -> return ()
+    R $ do
+        i <- asks rcIndent
+        c <- gets scColumn
+        closestEnclosing <- asks (listToMaybe . rcEnclosingSpans)
+        let indentedTxt = spaces <> text
+            spaces = T.replicate spacesN " "
+            spacesN =
+                if c == 0
+                    then i
+                    else bool 0 1 (requestedDel == RequestedSpace)
+        modify $ \sc ->
+            sc
+                { scBuilder = scBuilder sc <> fromText indentedTxt
+                , scColumn = scColumn sc + T.length indentedTxt
+                , scIndent =
+                    if c == 0
+                        then i
+                        else scIndent sc
+                , scThisLineSpans =
+                    let xs = scThisLineSpans sc
+                     in case stype of
+                            Atom -> case closestEnclosing of
+                                Nothing -> xs
+                                Just x -> x : xs
+                            _ -> xs
+                , scRequestedDelimiter = RequestedNothing
+                , scSpanMark =
+                    -- If there are pending comments, do not reset last comment
+                    -- location.
+                    if (stype == CommentPart) || (not . null . scPendingComments) sc
+                        then scSpanMark sc
+                        else Nothing
+                }
 
 -- | This primitive /does not/ necessarily output a space. It just ensures
 -- that the next thing that will be printed on the same line will be
@@ -352,11 +342,11 @@ spit stype text = do
 -- usually want.
 space :: R ()
 space = R . modify $ \sc ->
-  sc
-    { scRequestedDelimiter = case scRequestedDelimiter sc of
-        RequestedNothing -> RequestedSpace
-        other -> other
-    }
+    sc
+        { scRequestedDelimiter = case scRequestedDelimiter sc of
+            RequestedNothing -> RequestedSpace
+            other -> other
+        }
 
 declNewline :: R ()
 declNewline = newlineRawN =<< getPrinterOpt poNewlinesBetweenDecls
@@ -367,16 +357,16 @@ declNewline = newlineRawN =<< getPrinterOpt poNewlinesBetweenDecls
 -- Single-line comments don't have this issue because each line has at least "--".
 multilineCommentNewline :: R ()
 multilineCommentNewline =
-  -- inlining part of rawNewline here because rawNewline still swallows newlines
-  -- when called consecutively
-  R . modify $ \sc ->
-    sc
-      { scBuilder = scBuilder sc <> "\n",
-        scColumn = 0,
-        scIndent = 0,
-        scThisLineSpans = [],
-        scRequestedDelimiter = AfterNewline
-      }
+    -- inlining part of rawNewline here because rawNewline still swallows newlines
+    -- when called consecutively
+    R . modify $ \sc ->
+        sc
+            { scBuilder = scBuilder sc <> "\n"
+            , scColumn = 0
+            , scIndent = 0
+            , scThisLineSpans = []
+            , scRequestedDelimiter = AfterNewline
+            }
 
 -- | Output a newline. First time 'newline' is used after some non-'newline'
 -- output it gets inserted immediately. Second use of 'newline' does not
@@ -389,28 +379,28 @@ multilineCommentNewline =
 -- hard to output more than one blank newline in a row.
 newline :: R ()
 newline = do
-  indent <- R (gets scIndent)
-  cs <- reverse <$> R (gets scPendingComments)
-  case cs of
-    [] -> newlineRaw
-    ((position, _) : _) -> do
-      case position of
-        OnTheSameLine -> space
-        OnNextLine -> newlineRaw
-      R . forM_ cs $ \(_, text) ->
-        let modRC rc =
-              rc
-                { rcIndent = indent
-                }
-            R m = do
-              unless (T.null text) $
-                spit CommentPart text
-              newlineRaw
-         in local modRC m
-      R . modify $ \sc ->
-        sc
-          { scPendingComments = []
-          }
+    indent <- R (gets scIndent)
+    cs <- reverse <$> R (gets scPendingComments)
+    case cs of
+        [] -> newlineRaw
+        ((position, _) : _) -> do
+            case position of
+                OnTheSameLine -> space
+                OnNextLine -> newlineRaw
+            R . forM_ cs $ \(_, text) ->
+                let modRC rc =
+                        rc
+                            { rcIndent = indent
+                            }
+                    R m = do
+                        unless (T.null text) $
+                            spit CommentPart text
+                        newlineRaw
+                 in local modRC m
+            R . modify $ \sc ->
+                sc
+                    { scPendingComments = []
+                    }
 
 -- | Low-level newline primitive. This one always just inserts a newline, no
 -- hooks can be attached.
@@ -420,37 +410,37 @@ newlineRaw = newlineRawN 1
 -- | Low-level newline primitive. This always inserts 'n' newlines.
 newlineRawN :: Int -> R ()
 newlineRawN n = R . modify $ \sc ->
-  let requestedDel = scRequestedDelimiter sc
-      builderSoFar = scBuilder sc
-      n' = case requestedDel of
-        AfterNewline -> n - 1
-        RequestedNewline -> n - 1
-        VeryBeginning -> n - 1
-        _ -> n
-   in sc
-        { scBuilder = builderSoFar <> mconcat (replicate n' "\n"),
-          scColumn = 0,
-          scIndent = 0,
-          scThisLineSpans = [],
-          scRequestedDelimiter = case scRequestedDelimiter sc of
-            AfterNewline -> RequestedNewline
-            RequestedNewline -> RequestedNewline
-            VeryBeginning -> VeryBeginning
-            _ -> AfterNewline
-        }
+    let requestedDel = scRequestedDelimiter sc
+        builderSoFar = scBuilder sc
+        n' = case requestedDel of
+            AfterNewline -> n - 1
+            RequestedNewline -> n - 1
+            VeryBeginning -> n - 1
+            _ -> n
+     in sc
+            { scBuilder = builderSoFar <> mconcat (replicate n' "\n")
+            , scColumn = 0
+            , scIndent = 0
+            , scThisLineSpans = []
+            , scRequestedDelimiter = case scRequestedDelimiter sc of
+                AfterNewline -> RequestedNewline
+                RequestedNewline -> RequestedNewline
+                VeryBeginning -> VeryBeginning
+                _ -> AfterNewline
+            }
 
 -- | Insert a newline literal without modifying the internal state of the
 -- parser. This is to be used exceptionally, e.g. for printing multiline
 -- string literals.
 newlineLiteral :: R ()
 newlineLiteral = R . modify $ \sc ->
-  sc
-    { scBuilder = scBuilder sc <> "\n",
-      scColumn = 0,
-      scIndent = 0,
-      scThisLineSpans = [],
-      scRequestedDelimiter = AfterNewline
-    }
+    sc
+        { scBuilder = scBuilder sc <> "\n"
+        , scColumn = 0
+        , scIndent = 0
+        , scThisLineSpans = []
+        , scRequestedDelimiter = AfterNewline
+        }
 
 -- | Return the source type.
 askSourceType :: R SourceType
@@ -468,49 +458,49 @@ askDebug = R (asks rcDebug)
 -- | Like 'inci', but indents by exactly the given number of steps.
 inciBy :: Int -> R () -> R ()
 inciBy step (R m) = R (local modRC m)
-  where
-    modRC rc =
-      rc
-        { rcIndent =
-            -- Currently, in parenthesized expressions, we keep expressions aligned on
-            -- the left, and increase indentation from that point. But this means that
-            -- all subsequent indentation levels will be misaligned with the indentation,
-            -- assuming the parentheses starts on the indentation column:
-            --
-            --   ( Maybe
-            --         Int ->
-            --     String
-            --   )
-            --     ^^^^ 'Int' is 4 spaces from indentation start
-            --   ^^^^^^ but 6 spaces from start of column
-            --
-            -- To fix this, we mitigated the symptom by rounding down the indentation to
-            -- the indentation first before incrementing.
-            -- https://github.com/fourmolu/fourmolu/pull/37#discussion_r497904191
-            --
-            -- But this causes a regression with 2 space indentation, where a wrapped line
-            -- isn't indented enough if the parentheses does NOT start on the indentation
-            -- column.
-            -- https://github.com/fourmolu/fourmolu/issues/428
-            --
-            -- Ideally, we'd rather indicate that the "current" indentation is shifted,
-            -- while the "next" indentation should increase from the parentheses. However,
-            -- that would probably be a lot of reworking the rcIndent machinery. Instead,
-            -- we'll just restrict this patch to only apply on indentation > 2.
-            let modifyIndent =
-                  if poIndentation (rcPrinterOpts rc) > 2
-                    then roundDownToNearest step
-                    else id
-             in modifyIndent (rcIndent rc) + step
-        }
-    roundDownToNearest r n = (n `div` r) * r
+    where
+        modRC rc =
+            rc
+                { rcIndent =
+                    -- Currently, in parenthesized expressions, we keep expressions aligned on
+                    -- the left, and increase indentation from that point. But this means that
+                    -- all subsequent indentation levels will be misaligned with the indentation,
+                    -- assuming the parentheses starts on the indentation column:
+                    --
+                    --   ( Maybe
+                    --         Int ->
+                    --     String
+                    --   )
+                    --     ^^^^ 'Int' is 4 spaces from indentation start
+                    --   ^^^^^^ but 6 spaces from start of column
+                    --
+                    -- To fix this, we mitigated the symptom by rounding down the indentation to
+                    -- the indentation first before incrementing.
+                    -- https://github.com/fourmolu/fourmolu/pull/37#discussion_r497904191
+                    --
+                    -- But this causes a regression with 2 space indentation, where a wrapped line
+                    -- isn't indented enough if the parentheses does NOT start on the indentation
+                    -- column.
+                    -- https://github.com/fourmolu/fourmolu/issues/428
+                    --
+                    -- Ideally, we'd rather indicate that the "current" indentation is shifted,
+                    -- while the "next" indentation should increase from the parentheses. However,
+                    -- that would probably be a lot of reworking the rcIndent machinery. Instead,
+                    -- we'll just restrict this patch to only apply on indentation > 2.
+                    let modifyIndent =
+                            if poIndentation printerOpts > 2
+                                then roundDownToNearest step
+                                else id
+                     in modifyIndent (rcIndent rc) + step
+                }
+        roundDownToNearest r n = (n `div` r) * r
 
 -- | Like 'inci', but indents by the given fraction of a full step.
 inciByFrac :: Rational -> R () -> R ()
 inciByFrac x m = do
-  indentStep <- getPrinterOpt poIndentation
-  let step = truncate $ fromIntegral indentStep * x
-  inciBy step m
+    indentStep <- getPrinterOpt poIndentation
+    let step = truncate $ fromIntegral indentStep * x
+    inciBy step m
 
 -- | Increase indentation level by one indentation step for the inner
 -- computation. 'inci' should be used when a part of code must be more
@@ -525,55 +515,52 @@ inci = inciByFrac 1
 -- \"shifted\" to the right.
 sitcc :: R () -> R ()
 sitcc (R m) = do
-  requestedDel <- R (gets scRequestedDelimiter)
-  i <- R (asks rcIndent)
-  c <- R (gets scColumn)
-  let modRC rc =
-        rc
-          { rcIndent = max i (c + bool 0 1 (requestedDel == RequestedSpace))
-          }
-  R (local modRC m)
+    requestedDel <- R (gets scRequestedDelimiter)
+    i <- R (asks rcIndent)
+    c <- R (gets scColumn)
+    let modRC rc =
+            rc
+                { rcIndent = max i (c + bool 0 1 (requestedDel == RequestedSpace))
+                }
+    R (local modRC m)
 
 -- | When using trailing commas, same as 'sitcc'; when using leading commas,
 -- runs the input action unmodified.
 sitccIfTrailing :: R () -> R ()
 sitccIfTrailing x =
-  getPrinterOpt poCommaStyle >>= \case
-    Leading -> id x
-    Trailing -> sitcc x
+    getPrinterOpt poCommaStyle >>= \case
+        Leading -> id x
+        Trailing -> sitcc x
 
 -- | Set 'Layout' for internal computation.
 enterLayout :: Layout -> R () -> R ()
 enterLayout l (R m) = R (local modRC m)
-  where
-    modRC rc =
-      rc
-        { rcLayout = l
-        }
+    where
+        modRC rc =
+            rc
+                { rcLayout = l
+                }
 
 -- | Do one or another thing depending on current 'Layout'.
-vlayout ::
-  -- | Single line
-  R a ->
-  -- | Multi line
-  R a ->
-  R a
+vlayout
+    :: R a
+    -- ^ Single line
+    -> R a
+    -- ^ Multi line
+    -> R a
 vlayout sline mline = do
-  l <- getLayout
-  case l of
-    SingleLine -> sline
-    MultiLine -> mline
+    l <- getLayout
+    case l of
+        SingleLine -> sline
+        MultiLine -> mline
 
 -- | Get current 'Layout'.
 getLayout :: R Layout
 getLayout = R (asks rcLayout)
 
--- | Get a particular 'PrinterOpts' field from the environment.
-getPrinterOpt :: (forall f. PrinterOpts f -> f a) -> R a
-getPrinterOpt f = R $ asks $ runIdentity . f . rcPrinterOpts
-
-getLocalModules :: R (Set ModuleName)
-getLocalModules = R $ asks rcLocalModules
+-- | Get a particular field of the fixed 'style'.
+getPrinterOpt :: (PrinterOpts -> a) -> R a
+getPrinterOpt f = pure (f printerOpts)
 
 ----------------------------------------------------------------------------
 -- Special helpers for comment placement
@@ -582,31 +569,31 @@ getLocalModules = R $ asks rcLocalModules
 -- before next newline. When the comment goes after something else on the
 -- same line, a space will be inserted between preceding text and the
 -- comment when necessary.
-registerPendingCommentLine ::
-  -- | Comment position
-  CommentPosition ->
-  -- | 'Text' to output
-  Text ->
-  R ()
+registerPendingCommentLine
+    :: CommentPosition
+    -- ^ Comment position
+    -> Text
+    -- ^ 'Text' to output
+    -> R ()
 registerPendingCommentLine position text = R $ do
-  modify $ \sc ->
-    sc
-      { scPendingComments = (position, text) : scPendingComments sc
-      }
+    modify $ \sc ->
+        sc
+            { scPendingComments = (position, text) : scPendingComments sc
+            }
 
 -- | Drop elements that begin before or at the same place as given
 -- 'SrcSpan'.
-trimSpanStream ::
-  -- | Reference span
-  RealSrcSpan ->
-  R ()
+trimSpanStream
+    :: RealSrcSpan
+    -- ^ Reference span
+    -> R ()
 trimSpanStream ref = do
-  let leRef :: RealSrcSpan -> Bool
-      leRef x = realSrcSpanStart x <= realSrcSpanStart ref
-  R . modify $ \sc ->
-    sc
-      { scSpanStream = coerce (dropWhile leRef) (scSpanStream sc)
-      }
+    let leRef :: RealSrcSpan -> Bool
+        leRef x = realSrcSpanStart x <= realSrcSpanStart ref
+    R . modify $ \sc ->
+        sc
+            { scSpanStream = coerce (dropWhile leRef) (scSpanStream sc)
+            }
 
 -- | Get location of next element in AST.
 nextEltSpan :: R (Maybe RealSrcSpan)
@@ -614,47 +601,47 @@ nextEltSpan = listToMaybe . coerce <$> R (gets scSpanStream)
 
 -- | Pop a 'Comment' from the 'CommentStream' if given predicate is
 -- satisfied and there are comments in the stream.
-popComment ::
-  (LComment -> Bool) ->
-  R (Maybe LComment)
+popComment
+    :: (LComment -> Bool)
+    -> R (Maybe LComment)
 popComment f = R $ do
-  CommentStream cstream <- gets scCommentStream
-  case cstream of
-    (x : xs) | f x -> do
-      modify $ \sc -> sc {scCommentStream = CommentStream xs}
-      return $ Just x
-    _ -> return Nothing
+    CommentStream cstream <- gets scCommentStream
+    case cstream of
+        (x : xs) | f x -> do
+            modify $ \sc -> sc {scCommentStream = CommentStream xs}
+            return $ Just x
+        _ -> return Nothing
 
 -- | Get the comments contained in the enclosing span.
 getEnclosingComments :: R [LComment]
 getEnclosingComments = do
-  isEnclosed <-
-    getEnclosingSpan <&> \case
-      Just enclSpan -> containsSpan enclSpan
-      Nothing -> const False
-  CommentStream cstream <- R $ gets scCommentStream
-  pure $ takeWhile (isEnclosed . getLoc) cstream
+    isEnclosed <-
+        getEnclosingSpan <&> \case
+            Just enclSpan -> containsSpan enclSpan
+            Nothing -> const False
+    CommentStream cstream <- R $ gets scCommentStream
+    pure $ takeWhile (isEnclosed . getLoc) cstream
 
 -- | Get the immediately enclosing 'RealSrcSpan'.
 getEnclosingSpan :: R (Maybe RealSrcSpan)
 getEnclosingSpan = getEnclosingSpanWhere (const True)
 
 -- | Get the first enclosing 'RealSrcSpan' that satisfies given predicate.
-getEnclosingSpanWhere ::
-  -- | Predicate to use
-  (RealSrcSpan -> Bool) ->
-  R (Maybe RealSrcSpan)
+getEnclosingSpanWhere
+    :: (RealSrcSpan -> Bool)
+    -- ^ Predicate to use
+    -> R (Maybe RealSrcSpan)
 getEnclosingSpanWhere f =
-  find f <$> R (asks rcEnclosingSpans)
+    find f <$> R (asks rcEnclosingSpans)
 
 -- | Set 'RealSrcSpan' of enclosing span for the given computation.
 withEnclosingSpan :: RealSrcSpan -> R () -> R ()
 withEnclosingSpan spn (R m) = R (local modRC m)
-  where
-    modRC rc =
-      rc
-        { rcEnclosingSpans = spn : rcEnclosingSpans rc
-        }
+    where
+        modRC rc =
+            rc
+                { rcEnclosingSpans = spn : rcEnclosingSpans rc
+                }
 
 -- | Get spans on this line so far.
 thisLineSpans :: R [RealSrcSpan]
@@ -665,40 +652,40 @@ thisLineSpans = R (gets scThisLineSpans)
 
 -- | An auxiliary marker for keeping track of last output element.
 data SpanMark
-  = -- | Haddock comment
-    HaddockSpan HaddockStyle RealSrcSpan
-  | -- | Non-haddock comment
-    CommentSpan RealSrcSpan
-  | -- | A statement in a do-block and such span
-    StatementSpan RealSrcSpan
+    = -- | Haddock comment
+      HaddockSpan HaddockStyle RealSrcSpan
+    | -- | Non-haddock comment
+      CommentSpan RealSrcSpan
+    | -- | A statement in a do-block and such span
+      StatementSpan RealSrcSpan
 
 -- | Project 'RealSrcSpan' from 'SpanMark'.
 spanMarkSpan :: SpanMark -> RealSrcSpan
 spanMarkSpan = \case
-  HaddockSpan _ s -> s
-  CommentSpan s -> s
-  StatementSpan s -> s
+    HaddockSpan _ s -> s
+    CommentSpan s -> s
+    StatementSpan s -> s
 
 -- | Haddock string style.
 data HaddockStyle
-  = -- | @-- |@
-    Pipe
-  | -- | @-- ^@
-    Caret
-  | -- | @-- *@
-    Asterisk Int
-  | -- | @-- $@
-    Named String
+    = -- | @-- |@
+      Pipe
+    | -- | @-- ^@
+      Caret
+    | -- | @-- *@
+      Asterisk Int
+    | -- | @-- $@
+      Named String
 
 -- | Set span of last output comment.
-setSpanMark ::
-  -- | Span mark to set
-  SpanMark ->
-  R ()
+setSpanMark
+    :: SpanMark
+    -- ^ Span mark to set
+    -> R ()
 setSpanMark spnMark = R . modify $ \sc ->
-  sc
-    { scSpanMark = Just spnMark
-    }
+    sc
+        { scSpanMark = Just spnMark
+        }
 
 -- | Get span of last output comment.
 getSpanMark :: R (Maybe SpanMark)

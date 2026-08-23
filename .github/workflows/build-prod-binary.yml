@@ -27,7 +27,7 @@ jobs:
         null
       }}
     env:
-      FOURMOLU_REV: ${{ github.sha }}
+      FH_REV: ${{ github.sha }}
       version: ${{ inputs.version }}
       platform: ${{ matrix.platform }}
 
@@ -61,18 +61,18 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.stack
-          key: ${{ matrix.platform }}-build-prod-binary-${{ hashFiles('stack.yaml', 'fourmolu.cabal') }}
+          key: ${{ matrix.platform }}-build-prod-binary-${{ hashFiles('stack.yaml', '4h.cabal') }}
           restore-keys: |
                ${{ matrix.platform }}-build-prod-binary-
       -
         name: Build
         run: |
-          stack install :fourmolu --local-bin-path ./bin/
-          strip bin/fourmolu
-          cp bin/fourmolu bin/fourmolu-${version}-${platform}
+          stack install :4h --local-bin-path ./bin/
+          strip bin/4h
+          cp bin/4h bin/4h-${version}-${platform}
       -
         name: Store binary
         uses: actions/upload-artifact@v7
         with:
-          name: fourmolu-binary-${{ matrix.platform }}
-          path: bin/fourmolu-*
+          name: 4h-binary-${{ matrix.platform }}
+          path: bin/4h-*

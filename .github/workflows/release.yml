@@ -15,7 +15,7 @@ jobs:
         uses: haskell-actions/parse-cabal-file@v1
         id: cabal_file
         with:
-          cabal_file: fourmolu.cabal
+          cabal_file: 4h.cabal
     outputs:
       version: ${{ steps.cabal_file.outputs.version }}
 
@@ -46,7 +46,7 @@ jobs:
         name: Validate CHANGELOG
         run:
           scripts/release_notes.py validate-changelog
-            --fourmolu-version "${version}"
+            --release-version "${version}"
 
   ci:
     uses: ./.github/workflows/ci.yml
@@ -78,12 +78,12 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: ./.release/bin/
-          pattern: fourmolu-binary-*
+          pattern: 4h-binary-*
           merge-multiple: true
       -
         uses: actions/download-artifact@v8
         with:
-          name: fourmolu-sdist
+          name: 4h-sdist
           path: ./.release/sdist/
       -
         name: Create release archives
@@ -98,11 +98,11 @@ jobs:
         name: Generate release notes
         run:
           scripts/release_notes.py generate
-            --fourmolu-version "${version}"
-            --bin linux-x86_64 .release/bin/fourmolu-${version}-linux-x86_64.zip
-            --bin linux-aarch64 .release/bin/fourmolu-${version}-linux-arm64.zip
-            --bin macos-x86_64 .release/bin/fourmolu-${version}-darwin-x86_64.zip
-            --bin macos-aarch64 .release/bin/fourmolu-${version}-darwin-arm64.zip
+            --release-version "${version}"
+            --bin linux-x86_64 .release/bin/4h-${version}-linux-x86_64.zip
+            --bin linux-aarch64 .release/bin/4h-${version}-linux-arm64.zip
+            --bin macos-x86_64 .release/bin/4h-${version}-darwin-x86_64.zip
+            --bin macos-aarch64 .release/bin/4h-${version}-darwin-arm64.zip
             | tee .release/release-notes.md
       -
         uses: haskell-actions/hackage-publish@v1

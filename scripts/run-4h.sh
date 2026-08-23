@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Run fourmolu, assuming it's already been built.
+# Run 4h, assuming it's already been built.
 
 set -eu -o pipefail
 
@@ -14,12 +14,12 @@ if [[ -z "${BUILD_TYPE:-}" ]]; then
 fi
 
 case "${BUILD_TYPE}" in
-    (stack) FOURMOLU='stack exec -- fourmolu' ;;
-    (cabal) FOURMOLU='cabal run -- fourmolu' ;;
+    (stack) FH='stack exec -- 4h' ;;
+    (cabal) FH='cabal run -- 4h' ;;
     (*)
         echo "Unknown build type: ${BUILD_TYPE}" >&2
         exit 1
     ;;
 esac
 
-exec $FOURMOLU "$@"
+exec $FH "$@"

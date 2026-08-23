@@ -3,7 +3,6 @@ defaults {
         "!region-tests/**" \
         "!fixity-tests/**" \
         "!data/examples/**" \
-        "!data/fourmolu/**" \
         "!data/diff-tests/**" \
         "!data/parse-failures/**"
 }
@@ -16,8 +15,8 @@ hook hooky {
     files *
 }
 
-hook fourmolu {
-    command "scripts/run-fourmolu.sh" {
+hook 4h {
+    command "scripts/run-4h.sh" {
         check_args --mode check
         fix_args --mode inplace
     }

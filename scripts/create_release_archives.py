@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
 For each file in the given directory named:
-    fourmolu-0.0.0-linux-x86_64
+    4h-0.0.0-linux-x86_64
 
 Convert it into a zip file in the same directory named:
-    fourmolu-0.0.0-linux-x86_64.zip
+    4h-0.0.0-linux-x86_64.zip
 
 Containing the following directory structure:
-    fourmolu-0.0.0-linux-x86_64/
-    └── fourmolu
+    4h-0.0.0-linux-x86_64/
+    └── 4h
 """
 
 import argparse
@@ -31,7 +31,7 @@ def main():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         for file in args.files:
-            if not (file.is_file() and file.name.startswith("fourmolu-")):
+            if not (file.is_file() and file.name.startswith("4h-")):
                 logging.warning(f"Skipping file: {file}")
                 continue
 
@@ -47,7 +47,7 @@ def create_archive(*, src: Path, dest: Path, tmpdir: Path) -> None:
     (tmpdir / outer_dir).mkdir()
 
     src.chmod(0o755)
-    src.rename(tmpdir / outer_dir / "fourmolu")
+    src.rename(tmpdir / outer_dir / "4h")
 
     subprocess.run(
         ["zip", "-r", dest.absolute(), outer_dir],

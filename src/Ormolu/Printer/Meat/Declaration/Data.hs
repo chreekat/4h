@@ -11,10 +11,9 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | Renedring of data type declarations.
-module Ormolu.Printer.Meat.Declaration.Data
-  ( p_dataDecl,
-  )
-where
+module Ormolu.Printer.Meat.Declaration.Data (
+    p_dataDecl,
+) where
 
 import Control.Monad
 import Data.Choice (Choice, pattern Is, pattern Isn't, pattern With)
@@ -29,291 +28,291 @@ import GHC.Types.Fixity
 import GHC.Types.ForeignCall
 import GHC.Types.Name.Reader
 import GHC.Types.SrcLoc
-import Ormolu.Config
 import Ormolu.Printer.Combinators
 import Ormolu.Printer.Meat.Common
 import Ormolu.Printer.Meat.Type
+import Ormolu.Style
 import Ormolu.Utils
 
-p_dataDecl ::
-  -- | Whether to format as data family
-  FamilyStyle ->
-  -- | Type constructor
-  LocatedN RdrName ->
-  -- | Type variables
-  [tyVar] ->
-  -- | Get location information for type variables
-  (tyVar -> SrcSpan) ->
-  -- | How to print type variables
-  (tyVar -> R ()) ->
-  -- | Lexical fixity
-  LexicalFixity ->
-  -- | Data definition
-  HsDataDefn GhcPs ->
-  R ()
+p_dataDecl
+    :: FamilyStyle
+    -- ^ Whether to format as data family
+    -> LocatedN RdrName
+    -- ^ Type constructor
+    -> [tyVar]
+    -- ^ Type variables
+    -> (tyVar -> SrcSpan)
+    -- ^ Get location information for type variables
+    -> (tyVar -> R ())
+    -- ^ How to print type variables
+    -> LexicalFixity
+    -- ^ Lexical fixity
+    -> HsDataDefn GhcPs
+    -- ^ Data definition
+    -> R ()
 p_dataDecl style name tyVars getTyVarLoc p_tyVar fixity HsDataDefn {..} = do
-  txt $ case dd_cons of
-    NewTypeCon _ -> "newtype"
-    DataTypeCons False _ -> "data"
-    DataTypeCons True _ -> "type data"
-  txt $ case style of
-    Associated -> mempty
-    Free -> " instance"
-  let constructorSpans = getLocA name : fmap getTyVarLoc tyVars
-      sigSpans = maybeToList . fmap getLocA $ dd_kindSig
-      contextSpans = maybeToList . fmap getLocA $ dd_ctxt
-      ctypeSpans = maybeToList . fmap getLocA $ dd_cType
-      declHeaderSpans =
-        constructorSpans ++ sigSpans ++ contextSpans ++ ctypeSpans
-  switchLayout declHeaderSpans . inci $ do
-    case unLoc <$> dd_cType of
-      Nothing -> pure ()
-      Just (CType prag header (type_, _)) -> do
+    txt $ case dd_cons of
+        NewTypeCon _ -> "newtype"
+        DataTypeCons False _ -> "data"
+        DataTypeCons True _ -> "type data"
+    txt $ case style of
+        Associated -> mempty
+        Free -> " instance"
+    let constructorSpans = getLocA name : fmap getTyVarLoc tyVars
+        sigSpans = maybeToList . fmap getLocA $ dd_kindSig
+        contextSpans = maybeToList . fmap getLocA $ dd_ctxt
+        ctypeSpans = maybeToList . fmap getLocA $ dd_cType
+        declHeaderSpans =
+            constructorSpans ++ sigSpans ++ contextSpans ++ ctypeSpans
+    switchLayout declHeaderSpans . inci $ do
+        case unLoc <$> dd_cType of
+            Nothing -> pure ()
+            Just (CType prag header (type_, _)) -> do
+                breakpoint
+                p_sourceText prag
+                case header of
+                    Nothing -> pure ()
+                    Just (Header h _) -> space *> p_sourceText h
+                space
+                p_sourceText type_
+                txt " #-}"
         breakpoint
-        p_sourceText prag
-        case header of
-          Nothing -> pure ()
-          Just (Header h _) -> space *> p_sourceText h
-        space
-        p_sourceText type_
-        txt " #-}"
-    breakpoint
-    forM_ dd_ctxt p_lhsContext
-    switchLayout constructorSpans $
-      p_infixDefHelper
-        (Choice.fromBool (isInfix fixity))
-        (Is #indentArgs)
-        (p_rdrName name)
-        (p_tyVar <$> tyVars)
-    forM_ dd_kindSig $ \k -> do
-      space
-      token'dcolon
-      breakpoint
-      inci $ located k p_hsType
-  let dd_cons' = case dd_cons of
-        NewTypeCon a -> [a]
-        DataTypeCons _ as -> as
-      gadt = isJust dd_kindSig || any (isGadt . unLoc) dd_cons'
-  case dd_cons' of
-    [] -> pure ()
-    first_dd_cons : _ ->
-      if gadt
-        then inci $ do
-          switchLayout declHeaderSpans $ do
+        forM_ dd_ctxt p_lhsContext
+        switchLayout constructorSpans $
+            p_infixDefHelper
+                (Choice.fromBool (isInfix fixity))
+                (Is #indentArgs)
+                (p_rdrName name)
+                (p_tyVar <$> tyVars)
+        forM_ dd_kindSig $ \k -> do
+            space
+            token'dcolon
             breakpoint
-            txt "where"
-          breakpoint
-          sepSemi (located' (p_conDecl (Isn't #singleRecCon))) dd_cons'
-        else switchLayout (getLocA name : (getLocA <$> dd_cons')) . inci $ do
-          let singleRecCon =
-                case dd_cons' of
-                  [L _ ConDeclH98 {con_args = RecCon {}}] -> Is #singleRecCon
-                  _ -> Isn't #singleRecCon
-              compactLayoutAroundEquals =
-                onTheSameLine
-                  (getLocA name)
-                  (combineSrcSpans' (conDeclConsSpans (unLoc first_dd_cons)))
-              conDeclConsSpans = \case
-                ConDeclGADT {..} -> getLocA <$> con_names
-                ConDeclH98 {..} -> getLocA con_name :| []
-          if hasHaddocks dd_cons'
-            then newline
-            else
-              if Choice.isTrue singleRecCon && compactLayoutAroundEquals
-                then space
-                else breakpoint
-          equals
-          space
-          layout <- getLayout
-          let s =
-                if layout == MultiLine || hasHaddocks dd_cons'
-                  then newline >> txt "|" >> space
-                  else space >> txt "|" >> space
-              sitcc' =
-                if hasHaddocks dd_cons' || Choice.isFalse singleRecCon
-                  then sitcc
-                  else id
-          sep s (sitcc' . located' (p_conDecl singleRecCon)) dd_cons'
-  unless (null dd_derivs) breakpoint
+            inci $ located k p_hsType
+    let dd_cons' = case dd_cons of
+            NewTypeCon a -> [a]
+            DataTypeCons _ as -> as
+        gadt = isJust dd_kindSig || any (isGadt . unLoc) dd_cons'
+    case dd_cons' of
+        [] -> pure ()
+        first_dd_cons : _ ->
+            if gadt
+                then inci $ do
+                    switchLayout declHeaderSpans $ do
+                        breakpoint
+                        txt "where"
+                    breakpoint
+                    sepSemi (located' (p_conDecl (Isn't #singleRecCon))) dd_cons'
+                else switchLayout (getLocA name : (getLocA <$> dd_cons')) . inci $ do
+                    let singleRecCon =
+                            case dd_cons' of
+                                [L _ ConDeclH98 {con_args = RecCon {}}] -> Is #singleRecCon
+                                _ -> Isn't #singleRecCon
+                        compactLayoutAroundEquals =
+                            onTheSameLine
+                                (getLocA name)
+                                (combineSrcSpans' (conDeclConsSpans (unLoc first_dd_cons)))
+                        conDeclConsSpans = \case
+                            ConDeclGADT {..} -> getLocA <$> con_names
+                            ConDeclH98 {..} -> getLocA con_name :| []
+                    if hasHaddocks dd_cons'
+                        then newline
+                        else
+                            if Choice.isTrue singleRecCon && compactLayoutAroundEquals
+                                then space
+                                else breakpoint
+                    equals
+                    space
+                    layout <- getLayout
+                    let s =
+                            if layout == MultiLine || hasHaddocks dd_cons'
+                                then newline >> txt "|" >> space
+                                else space >> txt "|" >> space
+                        sitcc' =
+                            if hasHaddocks dd_cons' || Choice.isFalse singleRecCon
+                                then sitcc
+                                else id
+                    sep s (sitcc' . located' (p_conDecl singleRecCon)) dd_cons'
+    unless (null dd_derivs) breakpoint
 
-  sortDerivingClauses <- getPrinterOpt poSortDerivingClauses
-  let sortedDeriving = if sortDerivingClauses then sortOn (derivingStrategyKey . fmap unLoc . deriv_clause_strategy . unLoc) dd_derivs else dd_derivs
-  inci $ sep newline (located' p_hsDerivingClause) sortedDeriving
-  where
-    derivingStrategyKey Nothing = ClauseNoStrategy
-    derivingStrategyKey (Just strategy) = case strategy of
-      StockStrategy _ -> ClauseStockStrategy
-      NewtypeStrategy _ -> ClauseNewtypeStrategy
-      AnyclassStrategy _ -> ClauseAnyclassStrategy
-      ViaStrategy ty -> ClauseViaStrategy (showOutputable ty)
+    sortDerivingClauses <- getPrinterOpt poSortDerivingClauses
+    let sortedDeriving = if sortDerivingClauses then sortOn (derivingStrategyKey . fmap unLoc . deriv_clause_strategy . unLoc) dd_derivs else dd_derivs
+    inci $ sep newline (located' p_hsDerivingClause) sortedDeriving
+    where
+        derivingStrategyKey Nothing = ClauseNoStrategy
+        derivingStrategyKey (Just strategy) = case strategy of
+            StockStrategy _ -> ClauseStockStrategy
+            NewtypeStrategy _ -> ClauseNewtypeStrategy
+            AnyclassStrategy _ -> ClauseAnyclassStrategy
+            ViaStrategy ty -> ClauseViaStrategy (showOutputable ty)
 
 data DerivingClauseSortKey
-  = ClauseNoStrategy
-  | ClauseStockStrategy
-  | ClauseNewtypeStrategy
-  | ClauseAnyclassStrategy
-  | ClauseViaStrategy String
-  deriving (Eq, Ord)
+    = ClauseNoStrategy
+    | ClauseStockStrategy
+    | ClauseNewtypeStrategy
+    | ClauseAnyclassStrategy
+    | ClauseViaStrategy String
+    deriving (Eq, Ord)
 
 p_conDecl :: Choice "singleRecCon" -> ConDecl GhcPs -> R ()
 p_conDecl _ decl@ConDeclGADT {..} = do
-  mapM_ (p_hsDoc Pipe (With #endNewline)) con_doc
-  switchLayout conDeclSpn $ do
-    let c :| cs = con_names
-    p_rdrName c
-    unless (null cs) . inci $ do
-      commaDel
-      sep commaDel p_rdrName cs
-    inci $ p_hsFun decl
-  where
-    conDeclSpn =
-      fmap getLocA (NE.toList con_names) <> conSigSpans
-    conSigSpans =
-      [getLocA con_outer_bndrs]
-        <> maybeToList (fmap getLocA con_mb_cxt)
-        <> conArgResSpans
-    conArgResSpans =
-      getLocA con_res_ty : case con_g_args of
-        PrefixConGADT NoExtField xs -> getLocA . cdf_type <$> xs
-        RecConGADT _ x -> [getLocA x]
+    mapM_ (p_hsDoc Pipe (With #endNewline)) con_doc
+    switchLayout conDeclSpn $ do
+        let c :| cs = con_names
+        p_rdrName c
+        unless (null cs) . inci $ do
+            commaDel
+            sep commaDel p_rdrName cs
+        inci $ p_hsFun decl
+    where
+        conDeclSpn =
+            fmap getLocA (NE.toList con_names) <> conSigSpans
+        conSigSpans =
+            [getLocA con_outer_bndrs]
+                <> maybeToList (fmap getLocA con_mb_cxt)
+                <> conArgResSpans
+        conArgResSpans =
+            getLocA con_res_ty : case con_g_args of
+                PrefixConGADT NoExtField xs -> getLocA . cdf_type <$> xs
+                RecConGADT _ x -> [getLocA x]
 p_conDecl singleRecCon ConDeclH98 {..} =
-  case con_args of
-    PrefixCon xs -> do
-      renderConDoc
-      renderContext
-      switchLayout conDeclSpn $ do
-        p_rdrName con_name
-        let argsHaveDocs = conArgsHaveHaddocks xs
-            delimiter = if argsHaveDocs then newline else breakpoint
-        unless (null xs) delimiter
-        inci . sitcc $
-          sep delimiter (sitcc . p_hsConDeclFieldWithDoc) xs
-    RecCon l -> do
-      renderConDoc
-      renderContext
-      switchLayout conDeclSpn $ do
-        p_rdrName con_name
-        recordStyle <- getPrinterOpt poRecordStyle
-        if recordStyle == RecordStyleKnr then space else breakpoint
-        inciIf (Choice.isFalse singleRecCon) (located l p_hsConDeclRecFields)
-    InfixCon l r -> do
-      -- manually render these
-      let larg_doc = cdf_doc l
-          rarg_doc = cdf_doc r
+    case con_args of
+        PrefixCon xs -> do
+            renderConDoc
+            renderContext
+            switchLayout conDeclSpn $ do
+                p_rdrName con_name
+                let argsHaveDocs = conArgsHaveHaddocks xs
+                    delimiter = if argsHaveDocs then newline else breakpoint
+                unless (null xs) delimiter
+                inci . sitcc $
+                    sep delimiter (sitcc . p_hsConDeclFieldWithDoc) xs
+        RecCon l -> do
+            renderConDoc
+            renderContext
+            switchLayout conDeclSpn $ do
+                p_rdrName con_name
+                recordStyle <- getPrinterOpt poRecordStyle
+                if recordStyle == RecordStyleKnr then space else breakpoint
+                inciIf (Choice.isFalse singleRecCon) (located l p_hsConDeclRecFields)
+        InfixCon l r -> do
+            -- manually render these
+            let larg_doc = cdf_doc l
+                rarg_doc = cdf_doc r
 
-      -- the constructor haddock can go on top of the entire constructor
-      -- only if neither argument has haddocks
-      let putConDocOnTop = isNothing larg_doc && isNothing rarg_doc
+            -- the constructor haddock can go on top of the entire constructor
+            -- only if neither argument has haddocks
+            let putConDocOnTop = isNothing larg_doc && isNothing rarg_doc
 
-      when putConDocOnTop renderConDoc
-      renderContext
-      switchLayout conDeclSpn $ do
-        -- the left arg haddock can use pipe only if the infix constructor has docs
-        if isJust con_doc
-          then do
-            mapM_ (p_hsDoc Pipe (With #endNewline)) larg_doc
-            p_hsConDeclField l
-            breakpoint
-          else do
-            p_hsConDeclField l
-            case larg_doc of
-              Just doc -> space >> p_hsDoc Caret (With #endNewline) doc
-              Nothing -> breakpoint
-        inci $ do
-          unless putConDocOnTop renderConDoc
-          p_rdrName con_name
-          case rarg_doc of
-            Just doc -> newline >> p_hsDoc Pipe (With #endNewline) doc
-            Nothing -> breakpoint
-          p_hsConDeclField r
-  where
-    renderConDoc = mapM_ (p_hsDoc Pipe (With #endNewline)) con_doc
-    renderContext =
-      switchLayout conNameWithContextSpn $ do
-        when con_forall $ do
-          p_forallBndrs ForAllInvis p_hsTyVarBndr con_ex_tvs
-          breakpoint
-          indent <- getPrinterOpt poIndentation
-          vlayout (pure ()) . txt $ Text.replicate (indent - 2) " "
-        forM_ con_mb_cxt p_lhsContext
+            when putConDocOnTop renderConDoc
+            renderContext
+            switchLayout conDeclSpn $ do
+                -- the left arg haddock can use pipe only if the infix constructor has docs
+                if isJust con_doc
+                    then do
+                        mapM_ (p_hsDoc Pipe (With #endNewline)) larg_doc
+                        p_hsConDeclField l
+                        breakpoint
+                    else do
+                        p_hsConDeclField l
+                        case larg_doc of
+                            Just doc -> space >> p_hsDoc Caret (With #endNewline) doc
+                            Nothing -> breakpoint
+                inci $ do
+                    unless putConDocOnTop renderConDoc
+                    p_rdrName con_name
+                    case rarg_doc of
+                        Just doc -> newline >> p_hsDoc Pipe (With #endNewline) doc
+                        Nothing -> breakpoint
+                    p_hsConDeclField r
+    where
+        renderConDoc = mapM_ (p_hsDoc Pipe (With #endNewline)) con_doc
+        renderContext =
+            switchLayout conNameWithContextSpn $ do
+                when con_forall $ do
+                    p_forallBndrs ForAllInvis p_hsTyVarBndr con_ex_tvs
+                    breakpoint
+                    indent <- getPrinterOpt poIndentation
+                    vlayout (pure ()) . txt $ Text.replicate (indent - 2) " "
+                forM_ con_mb_cxt p_lhsContext
 
-    conNameWithContextSpn =
-      [getHasLoc $ acdh_forall con_ext]
-        <> fmap getLocA con_ex_tvs
-        <> maybeToList (fmap getLocA con_mb_cxt)
-        <> [conNameSpn]
-    conDeclSpn = conNameSpn : conArgsSpans
-    conNameSpn = getLocA con_name
-    conArgsSpans = case con_args of
-      PrefixCon xs -> getLocA . cdf_type <$> xs
-      RecCon l -> [getLocA l]
-      InfixCon x y -> getLocA . cdf_type <$> [x, y]
+        conNameWithContextSpn =
+            [getHasLoc $ acdh_forall con_ext]
+                <> fmap getLocA con_ex_tvs
+                <> maybeToList (fmap getLocA con_mb_cxt)
+                <> [conNameSpn]
+        conDeclSpn = conNameSpn : conArgsSpans
+        conNameSpn = getLocA con_name
+        conArgsSpans = case con_args of
+            PrefixCon xs -> getLocA . cdf_type <$> xs
+            RecCon l -> [getLocA l]
+            InfixCon x y -> getLocA . cdf_type <$> [x, y]
 
-p_lhsContext ::
-  LHsContext GhcPs ->
-  R ()
+p_lhsContext
+    :: LHsContext GhcPs
+    -> R ()
 p_lhsContext = \case
-  L _ [] -> pure ()
-  ctx -> do
-    located ctx p_hsContext
-    space
-    token'darrow
-    breakpoint
+    L _ [] -> pure ()
+    ctx -> do
+        located ctx p_hsContext
+        space
+        token'darrow
+        breakpoint
 
 isGadt :: ConDecl GhcPs -> Bool
 isGadt = \case
-  ConDeclGADT {} -> True
-  ConDeclH98 {} -> False
+    ConDeclGADT {} -> True
+    ConDeclH98 {} -> False
 
-p_hsDerivingClause ::
-  HsDerivingClause GhcPs ->
-  R ()
+p_hsDerivingClause
+    :: HsDerivingClause GhcPs
+    -> R ()
 p_hsDerivingClause HsDerivingClause {..} = do
-  singleDerivingParens <- getPrinterOpt poSingleDerivingParens
+    singleDerivingParens <- getPrinterOpt poSingleDerivingParens
 
-  txt "deriving"
-  let derivingWhat = located deriv_clause_tys $ \case
-        DctSingle NoExtField sigTy
-          | DerivingAlways <- singleDerivingParens -> parens N $ located sigTy p_hsSigType
-          | otherwise -> located sigTy p_hsSigType
-        DctMulti NoExtField sigTys
-          | [sigTy] <- sigTys,
-            DerivingNever <- singleDerivingParens ->
-              located sigTy p_hsSigType
-          | otherwise -> do
-              sortDerivedClasses <- getPrinterOpt poSortDerivedClasses
-              let sort = if sortDerivedClasses then sortOn showOutputable else id
-              parens N $
-                sep
-                  commaDel
-                  (sitcc . located' p_hsSigType)
-                  (sort sigTys)
-  space
-  case deriv_clause_strategy of
-    Nothing -> do
-      breakpoint
-      inci derivingWhat
-    Just (L _ a) -> case a of
-      StockStrategy _ -> do
-        txt "stock"
-        breakpoint
-        inci derivingWhat
-      AnyclassStrategy _ -> do
-        txt "anyclass"
-        breakpoint
-        inci derivingWhat
-      NewtypeStrategy _ -> do
-        txt "newtype"
-        breakpoint
-        inci derivingWhat
-      ViaStrategy (XViaStrategyPs _ sigTy) -> do
-        breakpoint
-        inci $ do
-          derivingWhat
-          breakpoint
-          txt "via"
-          space
-          located sigTy p_hsSigType
+    txt "deriving"
+    let derivingWhat = located deriv_clause_tys $ \case
+            DctSingle NoExtField sigTy
+                | DerivingAlways <- singleDerivingParens -> parens N $ located sigTy p_hsSigType
+                | otherwise -> located sigTy p_hsSigType
+            DctMulti NoExtField sigTys
+                | [sigTy] <- sigTys
+                , DerivingNever <- singleDerivingParens ->
+                    located sigTy p_hsSigType
+                | otherwise -> do
+                    sortDerivedClasses <- getPrinterOpt poSortDerivedClasses
+                    let sort = if sortDerivedClasses then sortOn showOutputable else id
+                    parens N $
+                        sep
+                            commaDel
+                            (sitcc . located' p_hsSigType)
+                            (sort sigTys)
+    space
+    case deriv_clause_strategy of
+        Nothing -> do
+            breakpoint
+            inci derivingWhat
+        Just (L _ a) -> case a of
+            StockStrategy _ -> do
+                txt "stock"
+                breakpoint
+                inci derivingWhat
+            AnyclassStrategy _ -> do
+                txt "anyclass"
+                breakpoint
+                inci derivingWhat
+            NewtypeStrategy _ -> do
+                txt "newtype"
+                breakpoint
+                inci derivingWhat
+            ViaStrategy (XViaStrategyPs _ sigTy) -> do
+                breakpoint
+                inci $ do
+                    derivingWhat
+                    breakpoint
+                    txt "via"
+                    space
+                    located sigTy p_hsSigType
 
 ----------------------------------------------------------------------------
 -- FunRepr ConDeclGADT
@@ -327,109 +326,109 @@ type ConDeclGADT = ConDecl
 --   * They can specify UNPACK/strictness
 --   * It can be a single argument with a record fields syntax
 instance FunRepr (ConDeclGADT GhcPs) where
-  parseFunRepr = \case
-    L _ ConDeclGADT {..} ->
-      fst
-        . addSig
-        . addOuter con_outer_bndrs
-        . addInner con_inner_bndrs
-        . addCtx con_mb_cxt
-        . addArgs con_g_args
-        $ mkRet con_res_ty
-    _ -> error "parseFunRepr @ConDeclGADT unexpectedly called on non-GADT constructor"
-    where
-      addSig (next, loc) = (ParsedFunSig {sig = (), next}, loc)
-      addOuter (L ann bndrs) =
-        case bndrs :: HsOuterSigTyVarBndrs GhcPs of
-          HsOuterImplicit {} -> id
-          HsOuterExplicit _ bndrs' -> \(next, loc) ->
-            let loc' = combineSrcSpans loc (getHasLoc ann)
-                fun =
-                  ParsedFunForall
-                    { tele = L (l2l loc') $ mkHsForAllInvisTele noAnn bndrs',
-                      next
-                    }
-             in (fun, loc')
-      addInner =
-        let go tele (next, loc) =
-              let loc' =
-                    combineSrcSpans loc $
-                      case tele of
-                        HsForAllVis x _ -> getHasLoc x
-                        HsForAllInvis x _ -> getHasLoc x
-                  fun = ParsedFunForall {tele = L (l2l loc') tele, next}
-               in (fun, loc')
-         in foldr (\tele acc -> go tele . acc) id
-      addCtx = \case
-        Nothing -> id
-        Just ctxs -> \(next, loc) ->
-          let loc' = combineSrcSpans loc (getHasLoc ctxs)
-              fun = ParsedFunQuals {ctxs = [L (l2l loc') ctxs], next}
-           in (fun, loc')
-      addArgs details =
-        case details :: HsConDeclGADTDetails GhcPs of
-          PrefixConGADT _ fields ->
-            let go field (next, loc) =
-                  let loc' = combineSrcSpans loc (getHasLoc field.cdf_type)
-                      fun =
-                        ParsedFunArg
-                          { span = l2l loc',
-                            arg = L noAnn (Left field),
-                            doc = field.cdf_doc,
-                            multAnn = field.cdf_multiplicity,
-                            next
-                          }
-                   in (fun, loc')
-             in foldr (\field acc -> go field . acc) id fields
-          RecConGADT _ fields -> \(next, loc) ->
-            let loc' = combineSrcSpans (getHasLoc fields) loc
-                fun =
-                  ParsedFunArg
-                    { span = l2l loc',
-                      arg = la2la $ Right <$> fields,
-                      doc = Nothing,
-                      multAnn = HsUnannotated (EpArrow noAnn),
-                      next
-                    }
-             in (fun, loc')
-      mkRet ty =
-        let fun =
-              case ty of
-                L _ (HsDocTy _ ret doc) -> ParsedFunReturn {ret, doc = Just doc}
-                ret -> ParsedFunReturn {ret, doc = Nothing}
-         in (fun, getHasLoc ty)
+    parseFunRepr = \case
+        L _ ConDeclGADT {..} ->
+            fst
+                . addSig
+                . addOuter con_outer_bndrs
+                . addInner con_inner_bndrs
+                . addCtx con_mb_cxt
+                . addArgs con_g_args
+                $ mkRet con_res_ty
+        _ -> error "parseFunRepr @ConDeclGADT unexpectedly called on non-GADT constructor"
+        where
+            addSig (next, loc) = (ParsedFunSig {sig = (), next}, loc)
+            addOuter (L ann bndrs) =
+                case bndrs :: HsOuterSigTyVarBndrs GhcPs of
+                    HsOuterImplicit {} -> id
+                    HsOuterExplicit _ bndrs' -> \(next, loc) ->
+                        let loc' = combineSrcSpans loc (getHasLoc ann)
+                            fun =
+                                ParsedFunForall
+                                    { tele = L (l2l loc') $ mkHsForAllInvisTele noAnn bndrs'
+                                    , next
+                                    }
+                         in (fun, loc')
+            addInner =
+                let go tele (next, loc) =
+                        let loc' =
+                                combineSrcSpans loc $
+                                    case tele of
+                                        HsForAllVis x _ -> getHasLoc x
+                                        HsForAllInvis x _ -> getHasLoc x
+                            fun = ParsedFunForall {tele = L (l2l loc') tele, next}
+                         in (fun, loc')
+                 in foldr (\tele acc -> go tele . acc) id
+            addCtx = \case
+                Nothing -> id
+                Just ctxs -> \(next, loc) ->
+                    let loc' = combineSrcSpans loc (getHasLoc ctxs)
+                        fun = ParsedFunQuals {ctxs = [L (l2l loc') ctxs], next}
+                     in (fun, loc')
+            addArgs details =
+                case details :: HsConDeclGADTDetails GhcPs of
+                    PrefixConGADT _ fields ->
+                        let go field (next, loc) =
+                                let loc' = combineSrcSpans loc (getHasLoc field.cdf_type)
+                                    fun =
+                                        ParsedFunArg
+                                            { span = l2l loc'
+                                            , arg = L noAnn (Left field)
+                                            , doc = field.cdf_doc
+                                            , multAnn = field.cdf_multiplicity
+                                            , next
+                                            }
+                                 in (fun, loc')
+                         in foldr (\field acc -> go field . acc) id fields
+                    RecConGADT _ fields -> \(next, loc) ->
+                        let loc' = combineSrcSpans (getHasLoc fields) loc
+                            fun =
+                                ParsedFunArg
+                                    { span = l2l loc'
+                                    , arg = la2la $ Right <$> fields
+                                    , doc = Nothing
+                                    , multAnn = HsUnannotated (EpArrow noAnn)
+                                    , next
+                                    }
+                         in (fun, loc')
+            mkRet ty =
+                let fun =
+                        case ty of
+                            L _ (HsDocTy _ ret doc) -> ParsedFunReturn {ret, doc = Just doc}
+                            ret -> ParsedFunReturn {ret, doc = Nothing}
+                 in (fun, getHasLoc ty)
 
-  type FunReprCtx (ConDeclGADT GhcPs) = HsType GhcPs
-  renderFunReprCtx = p_hsType
+    type FunReprCtx (ConDeclGADT GhcPs) = HsType GhcPs
+    renderFunReprCtx = p_hsType
 
-  -- Invariant: Exactly one of the following must be true:
-  --   * There's exactly one 'Right' arg
-  --   * There are zero or more 'Left' args
-  type FunReprArg (ConDeclGADT GhcPs) = Either (HsConDeclField GhcPs) [LocatedA (HsConDeclRecField GhcPs)]
-  renderFunReprArg = either p_hsConDeclField p_hsConDeclRecFields
+    -- Invariant: Exactly one of the following must be true:
+    --   * There's exactly one 'Right' arg
+    --   * There are zero or more 'Left' args
+    type FunReprArg (ConDeclGADT GhcPs) = Either (HsConDeclField GhcPs) [LocatedA (HsConDeclRecField GhcPs)]
+    renderFunReprArg = either p_hsConDeclField p_hsConDeclRecFields
 
-  type FunReprMult (ConDeclGADT GhcPs) = HsType GhcPs
-  renderFunReprMult = p_hsType
+    type FunReprMult (ConDeclGADT GhcPs) = HsType GhcPs
+    renderFunReprMult = p_hsType
 
-  type FunReprRet (ConDeclGADT GhcPs) = HsType GhcPs
-  renderFunReprRet = p_hsType
+    type FunReprRet (ConDeclGADT GhcPs) = HsType GhcPs
+    renderFunReprRet = p_hsType
 
 ----------------------------------------------------------------------------
 -- Helpers
 
 isInfix :: LexicalFixity -> Bool
 isInfix = \case
-  Infix -> True
-  Prefix -> False
+    Infix -> True
+    Prefix -> False
 
 hasHaddocks :: [LConDecl GhcPs] -> Bool
 hasHaddocks = any (f . unLoc)
-  where
-    f ConDeclH98 {..} =
-      isJust con_doc || case con_args of
-        PrefixCon xs -> conArgsHaveHaddocks xs
-        _ -> False
-    f _ = False
+    where
+        f ConDeclH98 {..} =
+            isJust con_doc || case con_args of
+                PrefixCon xs -> conArgsHaveHaddocks xs
+                _ -> False
+        f _ = False
 
 conArgsHaveHaddocks :: [HsConDeclField GhcPs] -> Bool
 conArgsHaveHaddocks = any (isJust . cdf_doc)
