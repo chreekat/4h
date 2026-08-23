@@ -5,10 +5,9 @@
 {-# LANGUAGE RecordWildCards #-}
 
 -- | Rendering of type synonym declarations.
-module Ormolu.Printer.Meat.Declaration.Type
-  ( p_synDecl,
-  )
-where
+module Ormolu.Printer.Meat.Declaration.Type (
+    p_synDecl,
+) where
 
 import Data.Choice (pattern Is, pattern Isn't)
 import GHC.Hs.Extension
@@ -21,32 +20,32 @@ import Ormolu.Printer.Combinators
 import Ormolu.Printer.Meat.Common
 import Ormolu.Printer.Meat.Type
 
-p_synDecl ::
-  -- | Type constructor
-  LocatedN RdrName ->
-  -- | Fixity
-  LexicalFixity ->
-  -- | Type variables
-  LHsQTyVars GhcPs ->
-  -- | RHS of type declaration
-  LHsType GhcPs ->
-  R ()
+p_synDecl
+    :: LocatedN RdrName
+    -- ^ Type constructor
+    -> LexicalFixity
+    -- ^ Fixity
+    -> LHsQTyVars GhcPs
+    -- ^ Type variables
+    -> LHsType GhcPs
+    -- ^ RHS of type declaration
+    -> R ()
 p_synDecl name fixity HsQTvs {..} t = do
-  txt "type"
-  space
-  switchLayout (getLocA name : map getLocA hsq_explicit) $
-    p_infixDefHelper
-      ( case fixity of
-          Infix -> Is #infixStyle
-          _ -> Isn't #infixStyle
-      )
-      (Is #indentArgs)
-      (p_rdrName name)
-      (map (located' p_hsTyVarBndr) hsq_explicit)
-  inci $ do
+    txt "type"
     space
-    equals
-    if hasDocStrings (unLoc t)
-      then newline
-      else breakpoint
-    located t p_hsType
+    switchLayout (getLocA name : map getLocA hsq_explicit) $
+        p_infixDefHelper
+            ( case fixity of
+                Infix -> Is #infixStyle
+                _ -> Isn't #infixStyle
+            )
+            (Is #indentArgs)
+            (p_rdrName name)
+            (map (located' p_hsTyVarBndr) hsq_explicit)
+    inci $ do
+        space
+        equals
+        if hasDocStrings (unLoc t)
+            then newline
+            else breakpoint
+        located t p_hsType

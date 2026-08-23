@@ -4,8 +4,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 -- | Definitions for fixity analysis.
-module Ormolu.Fixity
-  ( OpName,
+module Ormolu.Fixity (
+    OpName,
     pattern OpName,
     unOpName,
     occOpName,
@@ -28,8 +28,7 @@ module Ormolu.Fixity
     packageFixityMap',
     moduleFixityMap,
     applyFixityOverrides,
-  )
-where
+) where
 
 import Data.Binary qualified as Binary
 import Data.Binary.Get qualified as Binary
@@ -50,8 +49,8 @@ import Ormolu.Fixity.Internal
 -- | The built-in 'HackageInfo' used by Ormolu.
 hackageInfo :: HackageInfo
 hackageInfo =
-  Binary.runGet Binary.get $
-    BL.fromStrict $(embedFile "extract-hackage-info/hackage-info.bin")
+    Binary.runGet Binary.get $
+        BL.fromStrict $(embedFile "extract-hackage-info/hackage-info.bin")
 
 -- | Default set of packages to assume as dependencies e.g. when no Cabal
 -- file is found or taken into consideration.
@@ -59,110 +58,110 @@ defaultDependencies :: Set PackageName
 defaultDependencies = Set.singleton (mkPackageName "base")
 
 -- | Compute the fixity map that is specific to the package we are formatting.
-packageFixityMap ::
-  -- | Set of packages to select
-  Set PackageName ->
-  -- | Package fixity map
-  PackageFixityMap
+packageFixityMap
+    :: Set PackageName
+    -- ^ Set of packages to select
+    -> PackageFixityMap
+    -- ^ Package fixity map
 packageFixityMap = packageFixityMap' hackageInfo
 
 -- | The same as 'packageFixityMap', except this specific version of the
 -- function allows the user to specify 'HackageInfo' used to build the final
 -- fixity map.
-packageFixityMap' ::
-  -- | Hackage info
-  HackageInfo ->
-  -- | Set of packages to select
-  Set PackageName ->
-  -- | Package fixity map
-  PackageFixityMap
+packageFixityMap'
+    :: HackageInfo
+    -- ^ Hackage info
+    -> Set PackageName
+    -- ^ Set of packages to select
+    -> PackageFixityMap
+    -- ^ Package fixity map
 packageFixityMap' (HackageInfo m) = memoSet $ \dependencies ->
-  -- The core idea here is to transform:
-  --
-  -- Map PackageName (Map ModuleName (Map OpName FixityInfo))
-  --
-  -- into
-  --
-  -- Map OpName [(PackageName, ModuleName, FixityInfo)]
-  --
-  -- which we accomplish by turning 'Map's into tuples with 'Map.toList' and
-  -- then flattening them with 'flatten :: [(a, [b])] -> [(a, b)]'.
-  --
-  -- The target type results from the need to be able to quickly index by
-  -- the operator name when we do fixity resolution later.
-  PackageFixityMap
-    . Map.mapMaybe NE.nonEmpty
-    . Map.fromListWith (<>)
-    . fmap rearrange
-    . flatten
-    . Map.toList
-    . Map.map (flatten . Map.toList . Map.map Map.toList)
-    $ Map.restrictKeys m dependencies
-  where
-    rearrange (packageName, (moduleName, (opName, fixityInfo))) =
-      (opName, [(packageName, moduleName, fixityInfo)])
-    flatten xs = do
-      (k, vs) <- xs
-      v <- vs
-      return (k, v)
+    -- The core idea here is to transform:
+    --
+    -- Map PackageName (Map ModuleName (Map OpName FixityInfo))
+    --
+    -- into
+    --
+    -- Map OpName [(PackageName, ModuleName, FixityInfo)]
+    --
+    -- which we accomplish by turning 'Map's into tuples with 'Map.toList' and
+    -- then flattening them with 'flatten :: [(a, [b])] -> [(a, b)]'.
+    --
+    -- The target type results from the need to be able to quickly index by
+    -- the operator name when we do fixity resolution later.
+    PackageFixityMap
+        . Map.mapMaybe NE.nonEmpty
+        . Map.fromListWith (<>)
+        . fmap rearrange
+        . flatten
+        . Map.toList
+        . Map.map (flatten . Map.toList . Map.map Map.toList)
+        $ Map.restrictKeys m dependencies
+    where
+        rearrange (packageName, (moduleName, (opName, fixityInfo))) =
+            (opName, [(packageName, moduleName, fixityInfo)])
+        flatten xs = do
+            (k, vs) <- xs
+            v <- vs
+            return (k, v)
 
 -- | Compute the fixity map that is specific to the module we are formatting.
-moduleFixityMap ::
-  -- | Fixity information selected from dependencies of this package
-  PackageFixityMap ->
-  -- | A simplified representation of the import list in this module
-  [FixityImport] ->
-  -- | Fixity map specific to this module
-  ModuleFixityMap
+moduleFixityMap
+    :: PackageFixityMap
+    -- ^ Fixity information selected from dependencies of this package
+    -> [FixityImport]
+    -- ^ A simplified representation of the import list in this module
+    -> ModuleFixityMap
+    -- ^ Fixity map specific to this module
 moduleFixityMap (PackageFixityMap m) imports =
-  ModuleFixityMap $
-    Map.insert
-      ":"
-      (Given colonFixityInfo)
-      (Map.map FromModuleImports (Map.mapMaybeWithKey select m))
-  where
-    select ::
-      OpName ->
-      NonEmpty (PackageName, ModuleName, FixityInfo) ->
-      Maybe (NonEmpty (FixityQualification, FixityInfo))
-    select opName =
-      let f (packageName, moduleName, fixityInfo) =
-            (,fixityInfo)
-              <$> resolveThroughImports packageName moduleName opName
-       in NE.nonEmpty . concatMap f
-    resolveThroughImports ::
-      PackageName ->
-      ModuleName ->
-      OpName ->
-      [FixityQualification]
-    resolveThroughImports packageName moduleName opName =
-      let doesImportMatch FixityImport {..} =
-            let packageMatches =
-                  case fimportPackage of
-                    Nothing -> True
-                    Just p -> p == packageName
-                moduleMatches =
-                  fimportModule == moduleName
-                opMatches = case fimportList of
-                  Nothing -> True
-                  Just (Exactly, xs) -> opName `elem` xs
-                  Just (EverythingBut, xs) -> opName `notElem` xs
-             in packageMatches && moduleMatches && opMatches
-       in fimportQualified <$> filter doesImportMatch imports
+    ModuleFixityMap $
+        Map.insert
+            ":"
+            (Given colonFixityInfo)
+            (Map.map FromModuleImports (Map.mapMaybeWithKey select m))
+    where
+        select
+            :: OpName
+            -> NonEmpty (PackageName, ModuleName, FixityInfo)
+            -> Maybe (NonEmpty (FixityQualification, FixityInfo))
+        select opName =
+            let f (packageName, moduleName, fixityInfo) =
+                    (,fixityInfo)
+                        <$> resolveThroughImports packageName moduleName opName
+             in NE.nonEmpty . concatMap f
+        resolveThroughImports
+            :: PackageName
+            -> ModuleName
+            -> OpName
+            -> [FixityQualification]
+        resolveThroughImports packageName moduleName opName =
+            let doesImportMatch FixityImport {..} =
+                    let packageMatches =
+                            case fimportPackage of
+                                Nothing -> True
+                                Just p -> p == packageName
+                        moduleMatches =
+                            fimportModule == moduleName
+                        opMatches = case fimportList of
+                            Nothing -> True
+                            Just (Exactly, xs) -> opName `elem` xs
+                            Just (EverythingBut, xs) -> opName `notElem` xs
+                     in packageMatches && moduleMatches && opMatches
+             in fimportQualified <$> filter doesImportMatch imports
 
 -- | Apply fixity overrides.
-applyFixityOverrides ::
-  -- | User overrides
-  FixityOverrides ->
-  -- | Module fixity map
-  ModuleFixityMap ->
-  -- | Module fixity map with overrides applied
-  ModuleFixityMap
+applyFixityOverrides
+    :: FixityOverrides
+    -- ^ User overrides
+    -> ModuleFixityMap
+    -- ^ Module fixity map
+    -> ModuleFixityMap
+    -- ^ Module fixity map with overrides applied
 applyFixityOverrides (FixityOverrides o) (ModuleFixityMap m) =
-  ModuleFixityMap (Map.union (Map.map Given o) m)
+    ModuleFixityMap (Map.union (Map.map Given o) m)
 
 memoSet :: (Set PackageName -> v) -> Set PackageName -> v
 memoSet f =
-  memo (f . Set.fromAscList . fmap mkPackageName)
-    . fmap unPackageName
-    . Set.toAscList
+    memo (f . Set.fromAscList . fmap mkPackageName)
+        . fmap unPackageName
+        . Set.toAscList

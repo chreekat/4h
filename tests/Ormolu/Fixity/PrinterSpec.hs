@@ -18,63 +18,63 @@ import Test.Hspec.Megaparsec
 import Test.QuickCheck
 
 instance Arbitrary FixityOverrides where
-  arbitrary =
-    FixityOverrides . Map.fromList
-      <$> listOf ((,) <$> genOperator <*> genFixityInfo)
-    where
-      genOperator =
-        OpName . T.pack <$> oneof [genNormalOperator, genIdentifier]
-      genNormalOperator =
-        listOf1 (scaleDown arbitrary `suchThat` isOperatorConstituent)
-      genIdentifier = do
-        x <- arbitrary `suchThat` isIdentifierFirstChar
-        xs <- listOf1 (scaleDown arbitrary `suchThat` isIdentifierConstituent)
-        return (x : xs)
-      genFixityInfo = do
-        fiDirection <-
-          elements
-            [ InfixL,
-              InfixR,
-              InfixN
-            ]
-        precedenceWholePart <- fromIntegral <$> chooseInt (0, 9)
-        precedenceFractionalPart <-
-          if precedenceWholePart < 9.0
-            then (* 0.1) . fromIntegral <$> chooseInt (0, 1)
-            else return 0
-        let fiPrecedence = precedenceWholePart + precedenceFractionalPart
-        return FixityInfo {..}
+    arbitrary =
+        FixityOverrides . Map.fromList
+            <$> listOf ((,) <$> genOperator <*> genFixityInfo)
+        where
+            genOperator =
+                OpName . T.pack <$> oneof [genNormalOperator, genIdentifier]
+            genNormalOperator =
+                listOf1 (scaleDown arbitrary `suchThat` isOperatorConstituent)
+            genIdentifier = do
+                x <- arbitrary `suchThat` isIdentifierFirstChar
+                xs <- listOf1 (scaleDown arbitrary `suchThat` isIdentifierConstituent)
+                return (x : xs)
+            genFixityInfo = do
+                fiDirection <-
+                    elements
+                        [ InfixL
+                        , InfixR
+                        , InfixN
+                        ]
+                precedenceWholePart <- fromIntegral <$> chooseInt (0, 9)
+                precedenceFractionalPart <-
+                    if precedenceWholePart < 9.0
+                        then (* 0.1) . fromIntegral <$> chooseInt (0, 1)
+                        else return 0
+                let fiPrecedence = precedenceWholePart + precedenceFractionalPart
+                return FixityInfo {..}
 
 instance Arbitrary ModuleReexports where
-  arbitrary = ModuleReexports . Map.fromListWith combine <$> listOf genReexport
-    where
-      combine x y = NE.sort (x <> y)
-      genReexport = do
-        exportingModule <- arbitrary
-        exports <- NE.sort . NE.fromList . getNonEmpty <$> scaleDown arbitrary
-        return (exportingModule, exports)
+    arbitrary = ModuleReexports . Map.fromListWith combine <$> listOf genReexport
+        where
+            combine x y = NE.sort (x <> y)
+            genReexport = do
+                exportingModule <- arbitrary
+                exports <- NE.sort . NE.fromList . getNonEmpty <$> scaleDown arbitrary
+                return (exportingModule, exports)
 
 instance Arbitrary PackageName where
-  arbitrary =
-    mkPackageName
-      <$> listOf1 (scaleDown arbitrary `suchThat` isPackageNameConstituent)
+    arbitrary =
+        mkPackageName
+            <$> listOf1 (scaleDown arbitrary `suchThat` isPackageNameConstituent)
 
 instance Arbitrary ModuleName where
-  arbitrary =
-    ModuleName.fromString . intercalate "." <$> scaleDown (listOf1 genSegment)
-    where
-      genSegment = do
-        x <- arbitrary `suchThat` isModuleSegmentFirstChar
-        xs <- listOf (arbitrary `suchThat` isModuleSegmentConstituent)
-        return (x : xs)
+    arbitrary =
+        ModuleName.fromString . intercalate "." <$> scaleDown (listOf1 genSegment)
+        where
+            genSegment = do
+                x <- arbitrary `suchThat` isModuleSegmentFirstChar
+                xs <- listOf (arbitrary `suchThat` isModuleSegmentConstituent)
+                return (x : xs)
 
 scaleDown :: Gen a -> Gen a
 scaleDown = scale (`div` 4)
 
 spec :: Spec
 spec = do
-  describe "parseFixityOverrides & printFixityOverrides" $
-    it "arbitrary fixity maps are printed and parsed back correctly" $
-      property $ \fixityOverrides moduleReexports ->
-        parseDotOrmolu "" (printDotOrmolu fixityOverrides moduleReexports)
-          `shouldParse` (fixityOverrides, moduleReexports)
+    describe "parseFixityOverrides & printFixityOverrides" $
+        it "arbitrary fixity maps are printed and parsed back correctly" $
+            property $ \fixityOverrides moduleReexports ->
+                parseDotOrmolu "" (printDotOrmolu fixityOverrides moduleReexports)
+                    `shouldParse` (fixityOverrides, moduleReexports)

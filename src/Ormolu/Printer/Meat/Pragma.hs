@@ -2,10 +2,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Pretty-printing of language pragmas.
-module Ormolu.Printer.Meat.Pragma
-  ( p_pragmas,
-  )
-where
+module Ormolu.Printer.Meat.Pragma (
+    p_pragmas,
+) where
 
 import Control.Monad
 import Data.Char (isUpper)
@@ -23,10 +22,10 @@ import Ormolu.Printer.Comments
 
 -- | Pragma classification.
 data PragmaTy
-  = Language LanguagePragmaClass
-  | OptionsGHC
-  | OptionsHaddock
-  deriving (Eq, Ord)
+    = Language LanguagePragmaClass
+    | OptionsGHC
+    | OptionsHaddock
+    deriving (Eq, Ord)
 
 -- | Language pragma classification.
 --
@@ -40,62 +39,62 @@ data PragmaTy
 --
 -- See also: <https://github.com/tweag/ormolu/issues/404>
 data LanguagePragmaClass
-  = -- | A pack of extensions like @GHC2021@ or @Haskell2010@
-    ExtensionPack
-  | -- | All other extensions
-    Normal
-  | -- | Extensions starting with "No"
-    Disabling
-  | -- | Extensions that should go after everything else
-    Final
-  deriving (Eq, Ord)
+    = -- | A pack of extensions like @GHC2021@ or @Haskell2010@
+      ExtensionPack
+    | -- | All other extensions
+      Normal
+    | -- | Extensions starting with "No"
+      Disabling
+    | -- | Extensions that should go after everything else
+      Final
+    deriving (Eq, Ord)
 
 -- | Print a collection of 'Pragma's with their associated comments.
 p_pragmas :: [([LComment], Pragma)] -> R ()
 p_pragmas ps = do
-  let prepare = L.sortOn snd . L.nub . concatMap analyze
-      analyze = \case
-        (cs, PragmaLanguage xs) ->
-          let f x = (cs, (Language (classifyLanguagePragma x), x))
-           in f <$> xs
-        (cs, PragmaOptionsGHC x) -> [(cs, (OptionsGHC, x))]
-        (cs, PragmaOptionsHaddock x) -> [(cs, (OptionsHaddock, x))]
-  forM_ (prepare ps) $ \(cs, (pragmaTy, x)) ->
-    p_pragma cs pragmaTy x
+    let prepare = L.sortOn snd . L.nub . concatMap analyze
+        analyze = \case
+            (cs, PragmaLanguage xs) ->
+                let f x = (cs, (Language (classifyLanguagePragma x), x))
+                 in f <$> xs
+            (cs, PragmaOptionsGHC x) -> [(cs, (OptionsGHC, x))]
+            (cs, PragmaOptionsHaddock x) -> [(cs, (OptionsHaddock, x))]
+    forM_ (prepare ps) $ \(cs, (pragmaTy, x)) ->
+        p_pragma cs pragmaTy x
 
 p_pragma :: [LComment] -> PragmaTy -> Text -> R ()
 p_pragma comments ty x = do
-  forM_ comments $ \(L l comment) -> do
-    spitCommentNow l comment
+    forM_ comments $ \(L l comment) -> do
+        spitCommentNow l comment
+        newline
+    txt "{-# "
+    txt $ case ty of
+        Language _ -> "LANGUAGE"
+        OptionsGHC -> "OPTIONS_GHC"
+        OptionsHaddock -> "OPTIONS_HADDOCK"
+    space
+    txt x
+    txt " #-}"
     newline
-  txt "{-# "
-  txt $ case ty of
-    Language _ -> "LANGUAGE"
-    OptionsGHC -> "OPTIONS_GHC"
-    OptionsHaddock -> "OPTIONS_HADDOCK"
-  space
-  txt x
-  txt " #-}"
-  newline
 
 -- | Classify a 'LanguagePragma'.
 classifyLanguagePragma :: Text -> LanguagePragmaClass
 classifyLanguagePragma = \case
-  str | str `Set.member` extensionPacks -> ExtensionPack
-  "ImplicitPrelude" -> Final
-  "CUSKs" -> Final
-  str ->
-    case T.splitAt 2 str of
-      ("No", rest) ->
-        case T.uncons rest of
-          Nothing -> Normal
-          Just (x, _) ->
-            if isUpper x
-              then Disabling
-              else Normal
-      _ -> Normal
+    str | str `Set.member` extensionPacks -> ExtensionPack
+    "ImplicitPrelude" -> Final
+    "CUSKs" -> Final
+    str ->
+        case T.splitAt 2 str of
+            ("No", rest) ->
+                case T.uncons rest of
+                    Nothing -> Normal
+                    Just (x, _) ->
+                        if isUpper x
+                            then Disabling
+                            else Normal
+            _ -> Normal
 
 -- | Extension packs, like @GHC2021@ and @Haskell2010@.
 extensionPacks :: Set Text
 extensionPacks =
-  Set.fromList $ T.pack . show <$> [minBound :: Language .. maxBound]
+    Set.fromList $ T.pack . show <$> [minBound :: Language .. maxBound]

@@ -3,10 +3,9 @@
 {-# LANGUAGE RecordWildCards #-}
 
 -- | Printer for fixity overrides.
-module Ormolu.Fixity.Printer
-  ( printDotOrmolu,
-  )
-where
+module Ormolu.Fixity.Printer (
+    printDotOrmolu,
+) where
 
 import Data.Char qualified as Char
 import Data.List (intercalate)
@@ -26,53 +25,53 @@ import Distribution.Types.PackageName
 import Ormolu.Fixity
 
 -- | Print out a textual representation of an @.ormolu@ file.
-printDotOrmolu ::
-  FixityOverrides ->
-  ModuleReexports ->
-  Text
 printDotOrmolu
-  (FixityOverrides fixityOverrides)
-  (ModuleReexports moduleReexports) =
-    TL.toStrict . B.toLazyText $
-      (mconcat . fmap renderSingleFixityOverride . Map.toList) fixityOverrides
-        <> (mconcat . fmap renderSingleModuleReexport . Map.toList) moduleReexports
+    :: FixityOverrides
+    -> ModuleReexports
+    -> Text
+printDotOrmolu
+    (FixityOverrides fixityOverrides)
+    (ModuleReexports moduleReexports) =
+        TL.toStrict . B.toLazyText $
+            (mconcat . fmap renderSingleFixityOverride . Map.toList) fixityOverrides
+                <> (mconcat . fmap renderSingleModuleReexport . Map.toList) moduleReexports
 
 renderSingleFixityOverride :: (OpName, FixityInfo) -> Builder
 renderSingleFixityOverride (OpName operator, FixityInfo {..}) =
-  mconcat
-    [ case fiDirection of
-        InfixL -> "infixl"
-        InfixR -> "infixr"
-        InfixN -> "infix",
-      " ",
-      renderPrecedence fiPrecedence,
-      " ",
-      if isTickedOperator operator
-        then "`" <> B.fromText operator <> "`"
-        else B.fromText operator,
-      "\n"
-    ]
-  where
-    isTickedOperator = maybe True (Char.isLetter . fst) . T.uncons
-
-renderSingleModuleReexport ::
-  (ModuleName, NonEmpty (Maybe PackageName, ModuleName)) ->
-  Builder
-renderSingleModuleReexport (exportingModule, exports) =
-  sconcat (renderSingle <$> exports)
-  where
-    renderSingle (mexportedPackage, exportedModule) =
-      mconcat
-        [ "module ",
-          renderModuleName exportingModule,
-          " exports ",
-          renderOptionalPackageName mexportedPackage,
-          renderModuleName exportedModule,
-          "\n"
+    mconcat
+        [ case fiDirection of
+            InfixL -> "infixl"
+            InfixR -> "infixr"
+            InfixN -> "infix"
+        , " "
+        , renderPrecedence fiPrecedence
+        , " "
+        , if isTickedOperator operator
+            then "`" <> B.fromText operator <> "`"
+            else B.fromText operator
+        , "\n"
         ]
-    renderOptionalPackageName = \case
-      Nothing -> mempty
-      Just x -> "\"" <> B.fromString (unPackageName x) <> "\" "
+    where
+        isTickedOperator = maybe True (Char.isLetter . fst) . T.uncons
+
+renderSingleModuleReexport
+    :: (ModuleName, NonEmpty (Maybe PackageName, ModuleName))
+    -> Builder
+renderSingleModuleReexport (exportingModule, exports) =
+    sconcat (renderSingle <$> exports)
+    where
+        renderSingle (mexportedPackage, exportedModule) =
+            mconcat
+                [ "module "
+                , renderModuleName exportingModule
+                , " exports "
+                , renderOptionalPackageName mexportedPackage
+                , renderModuleName exportedModule
+                , "\n"
+                ]
+        renderOptionalPackageName = \case
+            Nothing -> mempty
+            Just x -> "\"" <> B.fromString (unPackageName x) <> "\" "
 
 renderModuleName :: ModuleName -> Builder
 renderModuleName = B.fromString . intercalate "." . ModuleName.components
@@ -80,8 +79,8 @@ renderModuleName = B.fromString . intercalate "." . ModuleName.components
 -- | Render precedence using integer representation for whole numbers.
 renderPrecedence :: Double -> Builder
 renderPrecedence x =
-  let (n :: Int, fraction :: Double) = properFraction x
-      isWholeEnough = fraction < 0.0001
-   in if isWholeEnough
-        then B.decimal n
-        else B.realFloat x
+    let (n :: Int, fraction :: Double) = properFraction x
+        isWholeEnough = fraction < 0.0001
+     in if isWholeEnough
+            then B.decimal n
+            else B.realFloat x

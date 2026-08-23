@@ -1,15 +1,14 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Ormolu.Utils.Cabal
-  ( CabalSearchResult (..),
+module Ormolu.Utils.Cabal (
+    CabalSearchResult (..),
     CabalInfo (..),
     Extension (..),
     getCabalInfoForSourceFile,
     findCabalFile,
     parseCabalInfo,
-  )
-where
+) where
 
 import Control.Exception
 import Control.Monad.IO.Class
@@ -38,71 +37,71 @@ import System.IO.Unsafe (unsafePerformIO)
 --
 -- @since 0.5.3.0
 data CabalSearchResult
-  = -- | Cabal file could not be found
-    CabalNotFound
-  | -- | Cabal file was found, but it did not mention the source file in
-    -- question
-    CabalDidNotMention CabalInfo
-  | -- | Cabal file was found and it mentions the source file in question
-    CabalFound CabalInfo
-  deriving (Eq, Show)
+    = -- | Cabal file could not be found
+      CabalNotFound
+    | -- | Cabal file was found, but it did not mention the source file in
+      -- question
+      CabalDidNotMention CabalInfo
+    | -- | Cabal file was found and it mentions the source file in question
+      CabalFound CabalInfo
+    deriving (Eq, Show)
 
 -- | Cabal information of interest to Ormolu.
 data CabalInfo = CabalInfo
-  { -- | Package name
-    ciPackageName :: !PackageName,
-    -- | Extension and language settings in the form of 'DynOption's
-    ciDynOpts :: ![DynOption],
-    -- | Direct dependencies
-    ciDependencies :: !(Set PackageName),
-    -- | Absolute path to the cabal file
-    ciCabalFilePath :: !FilePath,
-    -- | Local modules
-    ciModules :: ![ModuleName]
-  }
-  deriving (Eq, Show)
+    { ciPackageName :: !PackageName
+    -- ^ Package name
+    , ciDynOpts :: ![DynOption]
+    -- ^ Extension and language settings in the form of 'DynOption's
+    , ciDependencies :: !(Set PackageName)
+    -- ^ Direct dependencies
+    , ciCabalFilePath :: !FilePath
+    -- ^ Absolute path to the cabal file
+    , ciModules :: ![ModuleName]
+    -- ^ Local modules
+    }
+    deriving (Eq, Show)
 
 -- | Locate a @.cabal@ file corresponding to the given Haskell source file
 -- and obtain 'CabalInfo' from it.
-getCabalInfoForSourceFile ::
-  (MonadIO m) =>
-  -- | Haskell source file
-  FilePath ->
-  -- | Extracted cabal info, if any
-  m CabalSearchResult
+getCabalInfoForSourceFile
+    :: (MonadIO m)
+    => FilePath
+    -- ^ Haskell source file
+    -> m CabalSearchResult
+    -- ^ Extracted cabal info, if any
 getCabalInfoForSourceFile sourceFile =
-  liftIO (findCabalFile sourceFile) >>= \case
-    Just cabalFile -> do
-      (mentioned, cabalInfo) <- parseCabalInfo cabalFile sourceFile
-      return
-        ( if mentioned
-            then CabalFound cabalInfo
-            else CabalDidNotMention cabalInfo
-        )
-    Nothing -> return CabalNotFound
+    liftIO (findCabalFile sourceFile) >>= \case
+        Just cabalFile -> do
+            (mentioned, cabalInfo) <- parseCabalInfo cabalFile sourceFile
+            return
+                ( if mentioned
+                    then CabalFound cabalInfo
+                    else CabalDidNotMention cabalInfo
+                )
+        Nothing -> return CabalNotFound
 
 -- | Find the path to an appropriate @.cabal@ file for a Haskell source
 -- file, if available.
-findCabalFile ::
-  (MonadIO m) =>
-  -- | Path to a Haskell source file in a project with a @.cabal@ file
-  FilePath ->
-  -- | Absolute path to the @.cabal@ file, if available
-  m (Maybe FilePath)
+findCabalFile
+    :: (MonadIO m)
+    => FilePath
+    -- ^ Path to a Haskell source file in a project with a @.cabal@ file
+    -> m (Maybe FilePath)
+    -- ^ Absolute path to the @.cabal@ file, if available
 findCabalFile = findClosestFileSatisfying $ \x ->
-  takeExtension x == ".cabal"
+    takeExtension x == ".cabal"
 
 -- | Parsed cabal file information to be shared across multiple source files.
 data CachedCabalFile = CachedCabalFile
-  { -- | Parsed generic package description.
-    genericPackageDescription :: GenericPackageDescription,
-    -- | Map from Haskell source file paths (without any extensions) to the
+    { genericPackageDescription :: GenericPackageDescription
+    -- ^ Parsed generic package description.
+    , extensionsAndDeps :: Map FilePath ([DynOption], [PackageName])
+    -- ^ Map from Haskell source file paths (without any extensions) to the
     -- corresponding 'DynOption's and dependencies.
-    extensionsAndDeps :: Map FilePath ([DynOption], [PackageName]),
-    -- | Modules defined in the cabal file
-    localModules :: [ModuleName]
-  }
-  deriving (Show)
+    , localModules :: [ModuleName]
+    -- ^ Modules defined in the cabal file
+    }
+    deriving (Show)
 
 -- | Cache ref that stores 'CachedCabalFile' per Cabal file.
 cacheRef :: Cache FilePath CachedCabalFile
@@ -110,135 +109,135 @@ cacheRef = unsafePerformIO newCache
 {-# NOINLINE cacheRef #-}
 
 -- | Parse 'CabalInfo' from a @.cabal@ file at the given 'FilePath'.
-parseCabalInfo ::
-  (MonadIO m) =>
-  -- | Location of the .cabal file
-  FilePath ->
-  -- | Location of the source file we are formatting
-  FilePath ->
-  -- | Indication if the source file was mentioned in the Cabal file and the
-  -- extracted 'CabalInfo'
-  m (Bool, CabalInfo)
+parseCabalInfo
+    :: (MonadIO m)
+    => FilePath
+    -- ^ Location of the .cabal file
+    -> FilePath
+    -- ^ Location of the source file we are formatting
+    -> m (Bool, CabalInfo)
+    -- ^ Indication if the source file was mentioned in the Cabal file and the
+    -- extracted 'CabalInfo'
 parseCabalInfo cabalFileAsGiven sourceFileAsGiven = liftIO $ do
-  cabalFile <- makeAbsolute cabalFileAsGiven
-  sourceFileAbs <- makeAbsolute sourceFileAsGiven
-  CachedCabalFile {..} <- withCache cacheRef cabalFile $ do
-    cabalFileBs <- B.readFile cabalFile
-    genericPackageDescription <-
-      whenLeft (snd . runParseResult $ parseGenericPackageDescription cabalFileBs) $
-        throwIO . OrmoluCabalFileParsingFailed cabalFile . snd
-    let extensionsAndDeps =
-          getExtensionAndDepsMap cabalFile genericPackageDescription
-        localModules = getLocalModules genericPackageDescription
-    pure CachedCabalFile {..}
-  let (dynOpts, dependencies, mentioned) =
-        case M.lookup (dropExtensions sourceFileAbs) extensionsAndDeps of
-          Nothing -> ([], Set.toList defaultDependencies, False)
-          Just (dynOpts', dependencies') -> (dynOpts', dependencies', True)
-      pdesc = packageDescription genericPackageDescription
-  return
-    ( mentioned,
-      CabalInfo
-        { ciPackageName = pkgName (package pdesc),
-          ciDynOpts = dynOpts,
-          ciDependencies = Set.fromList dependencies,
-          ciCabalFilePath = cabalFile,
-          ciModules = localModules
-        }
-    )
-  where
-    whenLeft :: (Applicative f) => Either e a -> (e -> f a) -> f a
-    whenLeft eitha ma = either ma pure eitha
+    cabalFile <- makeAbsolute cabalFileAsGiven
+    sourceFileAbs <- makeAbsolute sourceFileAsGiven
+    CachedCabalFile {..} <- withCache cacheRef cabalFile $ do
+        cabalFileBs <- B.readFile cabalFile
+        genericPackageDescription <-
+            whenLeft (snd . runParseResult $ parseGenericPackageDescription cabalFileBs) $
+                throwIO . OrmoluCabalFileParsingFailed cabalFile . snd
+        let extensionsAndDeps =
+                getExtensionAndDepsMap cabalFile genericPackageDescription
+            localModules = getLocalModules genericPackageDescription
+        pure CachedCabalFile {..}
+    let (dynOpts, dependencies, mentioned) =
+            case M.lookup (dropExtensions sourceFileAbs) extensionsAndDeps of
+                Nothing -> ([], Set.toList defaultDependencies, False)
+                Just (dynOpts', dependencies') -> (dynOpts', dependencies', True)
+        pdesc = packageDescription genericPackageDescription
+    return
+        ( mentioned
+        , CabalInfo
+            { ciPackageName = pkgName (package pdesc)
+            , ciDynOpts = dynOpts
+            , ciDependencies = Set.fromList dependencies
+            , ciCabalFilePath = cabalFile
+            , ciModules = localModules
+            }
+        )
+    where
+        whenLeft :: (Applicative f) => Either e a -> (e -> f a) -> f a
+        whenLeft eitha ma = either ma pure eitha
 
 getLocalModules :: GenericPackageDescription -> [ModuleName]
 getLocalModules = extractPackageModules
-  where
-    extractPackageModules :: GenericPackageDescription -> [ModuleName]
-    extractPackageModules GenericPackageDescription {..} =
-      mconcat
-        [ maybe [] (extractLibraryModules . condTreeData) condLibrary,
-          extractLibraryModules . condTreeData . snd =<< condSubLibraries,
-          extractForeignLibraryModules . condTreeData . snd =<< condForeignLibs,
-          extractExecutableModules . condTreeData . snd =<< condExecutables,
-          extractTestSuiteModules . condTreeData . snd =<< condTestSuites,
-          extractBenchmarkModules . condTreeData . snd =<< condBenchmarks
-        ]
+    where
+        extractPackageModules :: GenericPackageDescription -> [ModuleName]
+        extractPackageModules GenericPackageDescription {..} =
+            mconcat
+                [ maybe [] (extractLibraryModules . condTreeData) condLibrary
+                , extractLibraryModules . condTreeData . snd =<< condSubLibraries
+                , extractForeignLibraryModules . condTreeData . snd =<< condForeignLibs
+                , extractExecutableModules . condTreeData . snd =<< condExecutables
+                , extractTestSuiteModules . condTreeData . snd =<< condTestSuites
+                , extractBenchmarkModules . condTreeData . snd =<< condBenchmarks
+                ]
 
-    extractLibraryModules :: Library -> [ModuleName]
-    extractLibraryModules Library {..} = mconcat [exposedModules, extractBuildInfoModules libBuildInfo]
+        extractLibraryModules :: Library -> [ModuleName]
+        extractLibraryModules Library {..} = mconcat [exposedModules, extractBuildInfoModules libBuildInfo]
 
-    extractForeignLibraryModules :: ForeignLib -> [ModuleName]
-    extractForeignLibraryModules = extractBuildInfoModules . foreignLibBuildInfo
+        extractForeignLibraryModules :: ForeignLib -> [ModuleName]
+        extractForeignLibraryModules = extractBuildInfoModules . foreignLibBuildInfo
 
-    extractExecutableModules :: Executable -> [ModuleName]
-    extractExecutableModules = extractBuildInfoModules . buildInfo
+        extractExecutableModules :: Executable -> [ModuleName]
+        extractExecutableModules = extractBuildInfoModules . buildInfo
 
-    extractTestSuiteModules :: TestSuite -> [ModuleName]
-    extractTestSuiteModules = extractBuildInfoModules . testBuildInfo
+        extractTestSuiteModules :: TestSuite -> [ModuleName]
+        extractTestSuiteModules = extractBuildInfoModules . testBuildInfo
 
-    extractBenchmarkModules :: Benchmark -> [ModuleName]
-    extractBenchmarkModules = extractBuildInfoModules . benchmarkBuildInfo
+        extractBenchmarkModules :: Benchmark -> [ModuleName]
+        extractBenchmarkModules = extractBuildInfoModules . benchmarkBuildInfo
 
-    extractBuildInfoModules :: BuildInfo -> [ModuleName]
-    extractBuildInfoModules BuildInfo {..} = mconcat [otherModules, virtualModules, autogenModules]
+        extractBuildInfoModules :: BuildInfo -> [ModuleName]
+        extractBuildInfoModules BuildInfo {..} = mconcat [otherModules, virtualModules, autogenModules]
 
 -- | Get a map from Haskell source file paths (without any extensions) to
 -- the corresponding 'DynOption's and dependencies.
-getExtensionAndDepsMap ::
-  -- | Path to the cabal file
-  FilePath ->
-  -- | Parsed generic package description
-  GenericPackageDescription ->
-  Map FilePath ([DynOption], [PackageName])
+getExtensionAndDepsMap
+    :: FilePath
+    -- ^ Path to the cabal file
+    -> GenericPackageDescription
+    -- ^ Parsed generic package description
+    -> Map FilePath ([DynOption], [PackageName])
 getExtensionAndDepsMap cabalFile GenericPackageDescription {..} =
-  M.unions . concat $
-    [ buildMap extractFromLibrary <$> lib ++ sublibs,
-      buildMap extractFromExecutable . snd <$> condExecutables,
-      buildMap extractFromTestSuite . snd <$> condTestSuites,
-      buildMap extractFromBenchmark . snd <$> condBenchmarks
-    ]
-  where
-    lib = maybeToList condLibrary
-    sublibs = snd <$> condSubLibraries
+    M.unions . concat $
+        [ buildMap extractFromLibrary <$> lib ++ sublibs
+        , buildMap extractFromExecutable . snd <$> condExecutables
+        , buildMap extractFromTestSuite . snd <$> condTestSuites
+        , buildMap extractFromBenchmark . snd <$> condBenchmarks
+        ]
+    where
+        lib = maybeToList condLibrary
+        sublibs = snd <$> condSubLibraries
 
-    buildMap f a = M.fromList ((,extsAndDeps) <$> files)
-      where
-        (mergedA, _) = CT.ignoreConditions a
-        (files, extsAndDeps) = f mergedA
+        buildMap f a = M.fromList ((,extsAndDeps) <$> files)
+            where
+                (mergedA, _) = CT.ignoreConditions a
+                (files, extsAndDeps) = f mergedA
 
-    extractFromBuildInfo extraModules BuildInfo {..} = (,(exts, deps)) $ do
-      m <- extraModules ++ (ModuleName.toFilePath <$> otherModules)
-      normalise . (takeDirectory cabalFile </>) <$> prependSrcDirs (dropExtensions m)
-      where
-        prependSrcDirs f
-          | null hsSourceDirs = [f]
-          | otherwise = (</> f) . getSymbolicPath <$> hsSourceDirs
-        deps = depPkgName <$> targetBuildDepends
-        exts = maybe [] langExt defaultLanguage ++ fmap extToDynOption defaultExtensions
-        langExt =
-          pure . DynOption . ("-X" <>) . \case
-            UnknownLanguage lan -> lan
-            lan -> show lan
-        extToDynOption =
-          DynOption . \case
-            EnableExtension e -> "-X" ++ show e
-            DisableExtension e -> "-XNo" ++ show e
-            UnknownExtension e -> "-X" ++ e
+        extractFromBuildInfo extraModules BuildInfo {..} = (,(exts, deps)) $ do
+            m <- extraModules ++ (ModuleName.toFilePath <$> otherModules)
+            normalise . (takeDirectory cabalFile </>) <$> prependSrcDirs (dropExtensions m)
+            where
+                prependSrcDirs f
+                    | null hsSourceDirs = [f]
+                    | otherwise = (</> f) . getSymbolicPath <$> hsSourceDirs
+                deps = depPkgName <$> targetBuildDepends
+                exts = maybe [] langExt defaultLanguage ++ fmap extToDynOption defaultExtensions
+                langExt =
+                    pure . DynOption . ("-X" <>) . \case
+                        UnknownLanguage lan -> lan
+                        lan -> show lan
+                extToDynOption =
+                    DynOption . \case
+                        EnableExtension e -> "-X" ++ show e
+                        DisableExtension e -> "-XNo" ++ show e
+                        UnknownExtension e -> "-X" ++ e
 
-    extractFromLibrary Library {..} =
-      extractFromBuildInfo (ModuleName.toFilePath <$> exposedModules) libBuildInfo
-    extractFromExecutable Executable {..} =
-      extractFromBuildInfo [getSymbolicPath modulePath] buildInfo
-    extractFromTestSuite TestSuite {..} =
-      extractFromBuildInfo mainPath testBuildInfo
-      where
-        mainPath = case testInterface of
-          TestSuiteExeV10 _ p -> [getSymbolicPath p]
-          TestSuiteLibV09 _ p -> [ModuleName.toFilePath p]
-          TestSuiteUnsupported {} -> []
-    extractFromBenchmark Benchmark {..} =
-      extractFromBuildInfo mainPath benchmarkBuildInfo
-      where
-        mainPath = case benchmarkInterface of
-          BenchmarkExeV10 _ p -> [getSymbolicPath p]
-          BenchmarkUnsupported {} -> []
+        extractFromLibrary Library {..} =
+            extractFromBuildInfo (ModuleName.toFilePath <$> exposedModules) libBuildInfo
+        extractFromExecutable Executable {..} =
+            extractFromBuildInfo [getSymbolicPath modulePath] buildInfo
+        extractFromTestSuite TestSuite {..} =
+            extractFromBuildInfo mainPath testBuildInfo
+            where
+                mainPath = case testInterface of
+                    TestSuiteExeV10 _ p -> [getSymbolicPath p]
+                    TestSuiteLibV09 _ p -> [ModuleName.toFilePath p]
+                    TestSuiteUnsupported {} -> []
+        extractFromBenchmark Benchmark {..} =
+            extractFromBuildInfo mainPath benchmarkBuildInfo
+            where
+                mainPath = case benchmarkInterface of
+                    BenchmarkExeV10 _ p -> [getSymbolicPath p]
+                    BenchmarkUnsupported {} -> []

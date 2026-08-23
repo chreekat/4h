@@ -2,10 +2,9 @@
 
 -- Modified from ghc-lib-api-ext.
 
-module GHC.DynFlags
-  ( baseDynFlags,
-  )
-where
+module GHC.DynFlags (
+    baseDynFlags,
+) where
 
 import GHC.Data.FastString
 import GHC.Driver.Session
@@ -17,44 +16,44 @@ import GHC.Utils.Fingerprint
 
 fakeSettings :: Settings
 fakeSettings =
-  Settings
-    { sGhcNameVersion =
-        GhcNameVersion
-          { ghcNameVersion_programName = "ghc",
-            ghcNameVersion_projectVersion = cProjectVersion
-          },
-      sFileSettings = FileSettings {},
-      sTargetPlatform =
-        Platform
-          { platformArchOS =
-              ArchOS
-                { -- see https://github.com/tweag/ormolu/issues/1087
-                  archOS_arch = ArchJavaScript,
-                  archOS_OS = OSUnknown
-                },
-            platformWordSize = PW8,
-            platformUnregisterised = True,
-            platformByteOrder = LittleEndian,
-            platformHasGnuNonexecStack = False,
-            platformHasIdentDirective = False,
-            platformHasSubsectionsViaSymbols = False,
-            platformIsCrossCompiling = False,
-            platformLeadingUnderscore = False,
-            platformTablesNextToCode = False,
-            platformHasLibm = False,
-            platform_constants = Nothing
-          },
-      sPlatformMisc = PlatformMisc {},
-      sUnitSettings =
-        UnitSettings
-          { unitSettings_baseUnitId = UnitId $ fsLit "ormolu"
-          },
-      sToolSettings =
-        ToolSettings
-          { toolSettings_opt_P_fingerprint = fingerprint0,
-            toolSettings_pgm_F = ""
-          }
-    }
+    Settings
+        { sGhcNameVersion =
+            GhcNameVersion
+                { ghcNameVersion_programName = "ghc"
+                , ghcNameVersion_projectVersion = cProjectVersion
+                }
+        , sFileSettings = FileSettings {}
+        , sTargetPlatform =
+            Platform
+                { platformArchOS =
+                    ArchOS
+                        { -- see https://github.com/tweag/ormolu/issues/1087
+                          archOS_arch = ArchJavaScript
+                        , archOS_OS = OSUnknown
+                        }
+                , platformWordSize = PW8
+                , platformUnregisterised = True
+                , platformByteOrder = LittleEndian
+                , platformHasGnuNonexecStack = False
+                , platformHasIdentDirective = False
+                , platformHasSubsectionsViaSymbols = False
+                , platformIsCrossCompiling = False
+                , platformLeadingUnderscore = False
+                , platformTablesNextToCode = False
+                , platformHasLibm = False
+                , platform_constants = Nothing
+                }
+        , sPlatformMisc = PlatformMisc {}
+        , sUnitSettings =
+            UnitSettings
+                { unitSettings_baseUnitId = UnitId $ fsLit "ormolu"
+                }
+        , sToolSettings =
+            ToolSettings
+                { toolSettings_opt_P_fingerprint = fingerprint0
+                , toolSettings_pgm_F = ""
+                }
+        }
 
 baseDynFlags :: DynFlags
 baseDynFlags = defaultDynFlags fakeSettings

@@ -2,8 +2,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Random utilities used by the code.
-module Ormolu.Utils
-  ( RelativePos (..),
+module Ormolu.Utils (
+    RelativePos (..),
     attachRelativePos,
     combineSrcSpans',
     notImplemented,
@@ -16,8 +16,7 @@ module Ormolu.Utils
     groupBy',
     textToStringBuffer,
     ghcModuleNameToCabal,
-  )
-where
+) where
 
 import Data.List (dropWhileEnd)
 import Data.List.NonEmpty (NonEmpty (..))
@@ -42,22 +41,22 @@ import Language.Haskell.Syntax.Module.Name qualified as GHC
 
 -- | Relative positions in a list.
 data RelativePos
-  = SinglePos
-  | FirstPos
-  | MiddlePos
-  | LastPos
-  deriving (Eq, Show)
+    = SinglePos
+    | FirstPos
+    | MiddlePos
+    | LastPos
+    deriving (Eq, Show)
 
 -- | Attach 'RelativePos'es to elements of a given list.
 attachRelativePos :: [a] -> [(RelativePos, a)]
 attachRelativePos = \case
-  [] -> []
-  [x] -> [(SinglePos, x)]
-  (x : xs) -> (FirstPos, x) : markLast xs
-  where
-    markLast [] = []
-    markLast [x] = [(LastPos, x)]
-    markLast (x : xs) = (MiddlePos, x) : markLast xs
+    [] -> []
+    [x] -> [(SinglePos, x)]
+    (x : xs) -> (FirstPos, x) : markLast xs
+    where
+        markLast [] = []
+        markLast [x] = [(LastPos, x)]
+        markLast (x : xs) = (MiddlePos, x) : markLast xs
 
 -- | Combine all source spans from the given list.
 combineSrcSpans' :: NonEmpty SrcSpan -> SrcSpan
@@ -75,70 +74,70 @@ showOutputable = showSDoc baseDynFlags . ppr
 -- make up the comment.
 splitDocString :: HsDocString -> [Text]
 splitDocString docStr =
-  case r of
-    [] -> [""]
-    _ -> r
-  where
-    r =
-      fmap escapeLeadingDollar
-        . dropPaddingSpace'
-        . dropWhileEnd T.null
-        . fmap (T.stripEnd . T.pack)
-        . lines
-        $ renderHsDocString docStr
-    -- We cannot have the first character to be a dollar because in that
-    -- case it'll be a parse error (apparently collides with named docs
-    -- syntax @-- $name@ somehow).
-    escapeLeadingDollar txt =
-      case T.uncons txt of
-        Just ('$', _) -> T.cons '\\' txt
-        _ -> txt
-    dropPaddingSpace' =
-      case docStr of
-        -- comments using '--'
-        MultiLineDocString {} -> dropPaddingSpace
-        -- comments using '{-'
-        NestedDocString {} -> \case
-          x : xs | Just (' ', x') <- T.uncons x -> x' : xs
-          xs -> xs
-        -- don't care about generated
-        GeneratedDocString {} -> id
-    dropPaddingSpace xs =
-      case dropWhile T.null xs of
-        [] -> []
-        (x : _) ->
-          let leadingSpace txt = case T.uncons txt of
-                Just (' ', _) -> True
-                _ -> False
-              dropSpace txt =
-                if leadingSpace txt
-                  then T.drop 1 txt
-                  else txt
-           in if leadingSpace x
-                then dropSpace <$> xs
-                else xs
+    case r of
+        [] -> [""]
+        _ -> r
+    where
+        r =
+            fmap escapeLeadingDollar
+                . dropPaddingSpace'
+                . dropWhileEnd T.null
+                . fmap (T.stripEnd . T.pack)
+                . lines
+                $ renderHsDocString docStr
+        -- We cannot have the first character to be a dollar because in that
+        -- case it'll be a parse error (apparently collides with named docs
+        -- syntax @-- $name@ somehow).
+        escapeLeadingDollar txt =
+            case T.uncons txt of
+                Just ('$', _) -> T.cons '\\' txt
+                _ -> txt
+        dropPaddingSpace' =
+            case docStr of
+                -- comments using '--'
+                MultiLineDocString {} -> dropPaddingSpace
+                -- comments using '{-'
+                NestedDocString {} -> \case
+                    x : xs | Just (' ', x') <- T.uncons x -> x' : xs
+                    xs -> xs
+                -- don't care about generated
+                GeneratedDocString {} -> id
+        dropPaddingSpace xs =
+            case dropWhile T.null xs of
+                [] -> []
+                (x : _) ->
+                    let leadingSpace txt = case T.uncons txt of
+                            Just (' ', _) -> True
+                            _ -> False
+                        dropSpace txt =
+                            if leadingSpace txt
+                                then T.drop 1 txt
+                                else txt
+                     in if leadingSpace x
+                            then dropSpace <$> xs
+                            else xs
 
 -- | Increment line number in a 'SrcSpan'.
 incSpanLine :: Int -> SrcSpan -> SrcSpan
 incSpanLine i = \case
-  RealSrcSpan s _ ->
-    let start = realSrcSpanStart s
-        end = realSrcSpanEnd s
-        incLine x =
-          let file = srcLocFile x
-              line = srcLocLine x
-              col = srcLocCol x
-           in mkRealSrcLoc file (line + i) col
-     in RealSrcSpan (mkRealSrcSpan (incLine start) (incLine end)) Strict.Nothing
-  UnhelpfulSpan x -> UnhelpfulSpan x
+    RealSrcSpan s _ ->
+        let start = realSrcSpanStart s
+            end = realSrcSpanEnd s
+            incLine x =
+                let file = srcLocFile x
+                    line = srcLocLine x
+                    col = srcLocCol x
+                 in mkRealSrcLoc file (line + i) col
+         in RealSrcSpan (mkRealSrcSpan (incLine start) (incLine end)) Strict.Nothing
+    UnhelpfulSpan x -> UnhelpfulSpan x
 
 -- | Do two declarations have a blank between them?
 separatedByBlank :: (a -> SrcSpan) -> a -> a -> Bool
 separatedByBlank loc a b =
-  fromMaybe False $ do
-    endA <- srcSpanEndLine <$> srcSpanToRealSrcSpan (loc a)
-    startB <- srcSpanStartLine <$> srcSpanToRealSrcSpan (loc b)
-    pure (startB - endA >= 2)
+    fromMaybe False $ do
+        endA <- srcSpanEndLine <$> srcSpanToRealSrcSpan (loc a)
+        startB <- srcSpanStartLine <$> srcSpanToRealSrcSpan (loc b)
+        pure (startB - endA >= 2)
 
 -- | Do two declaration groups have a blank between them?
 separatedByBlankNE :: (a -> SrcSpan) -> NonEmpty a -> NonEmpty a -> Bool
@@ -147,31 +146,31 @@ separatedByBlankNE loc a b = separatedByBlank loc (NE.last a) (NE.head b)
 -- | Return 'True' if one span ends on the same line the second one starts.
 onTheSameLine :: SrcSpan -> SrcSpan -> Bool
 onTheSameLine a b =
-  isOneLineSpan (mkSrcSpan (srcSpanEnd a) (srcSpanStart b))
+    isOneLineSpan (mkSrcSpan (srcSpanEnd a) (srcSpanStart b))
 
 -- | A generalisation of 'groupBy' to functions which aren't equivalences - a group ends
 -- when comparison fails with the previous element, rather than the first of the group.
 groupBy' :: (a -> a -> Bool) -> [a] -> [NonEmpty a]
 groupBy' eq = flip foldr [] $ \x -> \case
-  [] -> [pure x]
-  (y :| ys) : zs ->
-    if x `eq` y
-      then (x :| y : ys) : zs
-      else pure x : (y :| ys) : zs
+    [] -> [pure x]
+    (y :| ys) : zs ->
+        if x `eq` y
+            then (x :| y : ys) : zs
+            else pure x : (y :| ys) : zs
 
 -- | Convert 'Text' to a 'StringBuffer' by making a copy.
 textToStringBuffer :: Text -> StringBuffer
 textToStringBuffer txt = unsafePerformIO $ do
-  buf <- mallocPlainForeignPtrBytes (len + 3)
-  withForeignPtr buf $ \ptr -> do
-    TFFI.unsafeCopyToPtr txt ptr
-    -- last three bytes have to be zero for easier decoding
-    pokeElemOff ptr len 0
-    pokeElemOff ptr (len + 1) 0
-    pokeElemOff ptr (len + 2) 0
-  pure StringBuffer {buf, len, cur = 0}
-  where
-    len = TFFI.lengthWord8 txt
+    buf <- mallocPlainForeignPtrBytes (len + 3)
+    withForeignPtr buf $ \ptr -> do
+        TFFI.unsafeCopyToPtr txt ptr
+        -- last three bytes have to be zero for easier decoding
+        pokeElemOff ptr len 0
+        pokeElemOff ptr (len + 1) 0
+        pokeElemOff ptr (len + 2) 0
+    pure StringBuffer {buf, len, cur = 0}
+    where
+        len = TFFI.lengthWord8 txt
 
 -- | Convert GHC's 'ModuleName' into the one used by Cabal.
 ghcModuleNameToCabal :: GHC.ModuleName -> ModuleName

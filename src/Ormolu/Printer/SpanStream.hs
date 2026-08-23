@@ -1,9 +1,8 @@
 -- | Build span stream from AST.
-module Ormolu.Printer.SpanStream
-  ( SpanStream (..),
+module Ormolu.Printer.SpanStream (
+    SpanStream (..),
     mkSpanStream,
-  )
-where
+) where
 
 import Data.Data (Data)
 import Data.Foldable (toList)
@@ -20,30 +19,30 @@ import GHC.Types.SrcLoc
 -- e.g. whether there is another \"located\" element of AST between current
 -- element and comment we're considering for printing.
 newtype SpanStream = SpanStream [RealSrcSpan]
-  deriving (Eq, Show, Data, Semigroup, Monoid)
+    deriving (Data, Eq, Monoid, Semigroup, Show)
 
 -- | Create 'SpanStream' from a data structure containing \"located\"
 -- elements.
-mkSpanStream ::
-  (Data a) =>
-  -- | Data structure to inspect (AST)
-  a ->
-  SpanStream
+mkSpanStream
+    :: (Data a)
+    => a
+    -- ^ Data structure to inspect (AST)
+    -> SpanStream
 mkSpanStream a =
-  SpanStream
-    . sortOn realSrcSpanStart
-    . toList
-    $ everything mappend (const mempty `ext2Q` queryLocated `ext1Q` queryEpAnn) a
-  where
-    queryLocated ::
-      (Data e0) =>
-      GenLocated e0 e1 ->
-      Seq RealSrcSpan
-    queryLocated (L mspn _) =
-      maybe mempty srcSpanToRealSrcSpanSeq (cast mspn :: Maybe SrcSpan)
+    SpanStream
+        . sortOn realSrcSpanStart
+        . toList
+        $ everything mappend (const mempty `ext2Q` queryLocated `ext1Q` queryEpAnn) a
+    where
+        queryLocated
+            :: (Data e0)
+            => GenLocated e0 e1
+            -> Seq RealSrcSpan
+        queryLocated (L mspn _) =
+            maybe mempty srcSpanToRealSrcSpanSeq (cast mspn :: Maybe SrcSpan)
 
-    queryEpAnn :: EpAnn ann -> Seq RealSrcSpan
-    queryEpAnn = srcSpanToRealSrcSpanSeq . locA
+        queryEpAnn :: EpAnn ann -> Seq RealSrcSpan
+        queryEpAnn = srcSpanToRealSrcSpanSeq . locA
 
-    srcSpanToRealSrcSpanSeq =
-      Seq.fromList . maybeToList . srcSpanToRealSrcSpan
+        srcSpanToRealSrcSpanSeq =
+            Seq.fromList . maybeToList . srcSpanToRealSrcSpan

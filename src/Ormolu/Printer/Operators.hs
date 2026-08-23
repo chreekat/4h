@@ -4,15 +4,14 @@
 
 -- | This module helps handle operator chains composed of different
 -- operators that may have different precedence and fixities.
-module Ormolu.Printer.Operators
-  ( OpTree (..),
+module Ormolu.Printer.Operators (
+    OpTree (..),
     pattern BinaryOpBranches,
     OpInfo (..),
     opTreeLoc,
     reassociateOpTree,
     isHardSplitterOp,
-  )
-where
+) where
 
 import Data.Choice (Choice)
 import Data.List.NonEmpty (NonEmpty (..))
@@ -32,13 +31,13 @@ import Ormolu.Utils
 -- precedence level as direct siblings in this tree, to better represent the
 -- idea of a chain of operators.
 data OpTree ty op
-  = -- | A node which is not an operator application
-    OpNode ty
-  | -- | A subtree of operator application(s); the invariant is: @length
-    -- exprs == length ops + 1@. @OpBranches [x, y, z] [op1, op2]@
-    -- represents the expression @x op1 y op2 z@.
-    OpBranches (NonEmpty (OpTree ty op)) [op]
-  deriving (Eq, Show)
+    = -- | A node which is not an operator application
+      OpNode ty
+    | -- | A subtree of operator application(s); the invariant is: @length
+      -- exprs == length ops + 1@. @OpBranches [x, y, z] [op1, op2]@
+      -- represents the expression @x op1 y op2 z@.
+      OpBranches (NonEmpty (OpTree ty op)) [op]
+    deriving (Eq, Show)
 
 pattern BinaryOpBranches :: OpTree ty op -> op -> OpTree ty op -> OpTree ty op
 pattern BinaryOpBranches x op y = OpBranches (x :| [y]) [op]
@@ -46,110 +45,110 @@ pattern BinaryOpBranches x op y = OpBranches (x :| [y]) [op]
 -- | Wrapper for an operator, carrying information about its name and
 -- fixity.
 data OpInfo op = OpInfo
-  { -- | The actual operator
-    opiOp :: op,
-    -- | Its name, if available. We use 'Maybe RdrName' here instead of
+    { opiOp :: op
+    -- ^ The actual operator
+    , opiName :: Maybe RdrName
+    -- ^ Its name, if available. We use 'Maybe RdrName' here instead of
     -- 'RdrName' because the name-fetching function received by
     -- 'reassociateOpTree' returns a 'Maybe'
-    opiName :: Maybe RdrName,
-    -- | Information about the fixity direction and precedence level of the
+    , opiFixityApproximation :: FixityApproximation
+    -- ^ Information about the fixity direction and precedence level of the
     -- operator
-    opiFixityApproximation :: FixityApproximation
-  }
-  deriving (Eq)
+    }
+    deriving (Eq)
 
 -- | Compare the precedence level of two operators. 'OpInfo' is required
 -- (and not just 'FixityInfo') because operator names are used in the case
 -- of equality.
 compareOp :: OpInfo op -> OpInfo op -> Maybe Ordering
 compareOp
-  (OpInfo _ mName1 FixityApproximation {faMinPrecedence = min1, faMaxPrecedence = max1})
-  (OpInfo _ mName2 FixityApproximation {faMinPrecedence = min2, faMaxPrecedence = max2}) =
-    if
-      -- Only declare two precedence levels as equal when
-      --  * either both precedence levels are precise
-      --    (fiMinPrecedence == fiMaxPrecedence) and match
-      --  * or when the precedence levels are imprecise but when the
-      --    operator names match
-      | min1 == min2
-          && max1 == max2
-          && (min1 == max1 || sameSymbol) ->
-          Just EQ
-      | max1 < min2 -> Just LT
-      | max2 < min1 -> Just GT
-      | otherwise -> Nothing
-    where
-      sameSymbol = case (mName1, mName2) of
-        (Just n1, Just n2) -> n1 == n2
-        _ -> False
+    (OpInfo _ mName1 FixityApproximation {faMinPrecedence = min1, faMaxPrecedence = max1})
+    (OpInfo _ mName2 FixityApproximation {faMinPrecedence = min2, faMaxPrecedence = max2}) =
+        if
+            -- Only declare two precedence levels as equal when
+            --  * either both precedence levels are precise
+            --    (fiMinPrecedence == fiMaxPrecedence) and match
+            --  * or when the precedence levels are imprecise but when the
+            --    operator names match
+            | min1 == min2
+                && max1 == max2
+                && (min1 == max1 || sameSymbol) ->
+                Just EQ
+            | max1 < min2 -> Just LT
+            | max2 < min1 -> Just GT
+            | otherwise -> Nothing
+        where
+            sameSymbol = case (mName1, mName2) of
+                (Just n1, Just n2) -> n1 == n2
+                _ -> False
 
 -- | Return combined 'SrcSpan's of all elements in this 'OpTree'.
 opTreeLoc :: (HasLoc l) => OpTree (GenLocated l a) b -> SrcSpan
 opTreeLoc (OpNode n) = getHasLoc n
 opTreeLoc (OpBranches exprs _) =
-  combineSrcSpans' . fmap opTreeLoc $ exprs
+    combineSrcSpans' . fmap opTreeLoc $ exprs
 
 -- | Re-associate an 'OpTree' taking into account precedence of operators.
 -- Users are expected to first construct an initial 'OpTree', then
 -- re-associate it using this function before printing.
-reassociateOpTree ::
-  -- | Whether to print debug info regarding fixity inference
-  Choice "debug" ->
-  -- | How to get name of an operator
-  (op -> Maybe RdrName) ->
-  -- | Fixity Map
-  ModuleFixityMap ->
-  -- | Original 'OpTree'
-  OpTree ty op ->
-  -- | Re-associated 'OpTree', with added context and info around operators
-  OpTree ty (OpInfo op)
+reassociateOpTree
+    :: Choice "debug"
+    -- ^ Whether to print debug info regarding fixity inference
+    -> (op -> Maybe RdrName)
+    -- ^ How to get name of an operator
+    -> ModuleFixityMap
+    -- ^ Fixity Map
+    -> OpTree ty op
+    -- ^ Original 'OpTree'
+    -> OpTree ty (OpInfo op)
+    -- ^ Re-associated 'OpTree', with added context and info around operators
 reassociateOpTree debug getOpName modFixityMap =
-  reassociateFlatOpTree
-    . makeFlatOpTree
-    . addFixityInfo debug modFixityMap getOpName
+    reassociateFlatOpTree
+        . makeFlatOpTree
+        . addFixityInfo debug modFixityMap getOpName
 
 -- | Wrap every operator of the tree with 'OpInfo' to carry the information
 -- about its fixity (extracted from the specified fixity map).
-addFixityInfo ::
-  -- | Whether to print debug info regarding fixity inference
-  Choice "debug" ->
-  -- | Fixity map for operators
-  ModuleFixityMap ->
-  -- | How to get the name of an operator
-  (op -> Maybe RdrName) ->
-  -- | 'OpTree'
-  OpTree ty op ->
-  -- | 'OpTree', with fixity info wrapped around each operator
-  OpTree ty (OpInfo op)
+addFixityInfo
+    :: Choice "debug"
+    -- ^ Whether to print debug info regarding fixity inference
+    -> ModuleFixityMap
+    -- ^ Fixity map for operators
+    -> (op -> Maybe RdrName)
+    -- ^ How to get the name of an operator
+    -> OpTree ty op
+    -- ^ 'OpTree'
+    -> OpTree ty (OpInfo op)
+    -- ^ 'OpTree', with fixity info wrapped around each operator
 addFixityInfo _ _ _ (OpNode n) = OpNode n
 addFixityInfo debug modFixityMap getOpName (OpBranches exprs ops) =
-  OpBranches
-    (addFixityInfo debug modFixityMap getOpName <$> exprs)
-    (toOpInfo <$> ops)
-  where
-    toOpInfo o = OpInfo o mrdrName fixityApproximation
-      where
-        mrdrName = getOpName o
-        fixityApproximation = case mrdrName of
-          Nothing -> defaultFixityApproximation
-          Just rdrName -> inferFixity debug rdrName modFixityMap
+    OpBranches
+        (addFixityInfo debug modFixityMap getOpName <$> exprs)
+        (toOpInfo <$> ops)
+    where
+        toOpInfo o = OpInfo o mrdrName fixityApproximation
+            where
+                mrdrName = getOpName o
+                fixityApproximation = case mrdrName of
+                    Nothing -> defaultFixityApproximation
+                    Just rdrName -> inferFixity debug rdrName modFixityMap
 
 -- | Given a 'OpTree' of any shape, produce a flat 'OpTree', where every
 -- node and operator is directly connected to the root.
 makeFlatOpTree :: OpTree ty op -> OpTree ty op
 makeFlatOpTree (OpNode n) = OpNode n
 makeFlatOpTree (OpBranches exprs ops) =
-  OpBranches rExprs rOps
-  where
-    makeFlatOpTree' expr = case makeFlatOpTree expr of
-      OpNode n -> (NE.singleton (OpNode n), [])
-      OpBranches noptExprs noptOps -> (noptExprs, noptOps)
-    flattenedSubTrees = makeFlatOpTree' <$> exprs
-    rExprs = fst =<< flattenedSubTrees
-    rOps = concat $ interleave (snd <$> NE.toList flattenedSubTrees) (pure <$> ops)
-    interleave (x : xs) (y : ys) = x : y : interleave xs ys
-    interleave [] ys = ys
-    interleave xs [] = xs
+    OpBranches rExprs rOps
+    where
+        makeFlatOpTree' expr = case makeFlatOpTree expr of
+            OpNode n -> (NE.singleton (OpNode n), [])
+            OpBranches noptExprs noptOps -> (noptExprs, noptOps)
+        flattenedSubTrees = makeFlatOpTree' <$> exprs
+        rExprs = fst =<< flattenedSubTrees
+        rOps = concat $ interleave (snd <$> NE.toList flattenedSubTrees) (pure <$> ops)
+        interleave (x : xs) (y : ys) = x : y : interleave xs ys
+        interleave [] ys = ys
+        interleave xs [] = xs
 
 -- | Starting from a flat 'OpTree' (i.e. a n-ary tree of depth 1,
 -- without regard for operator fixities), build an 'OpTree' with proper
@@ -188,181 +187,181 @@ makeFlatOpTree (OpBranches exprs ops) =
 -- where we can't find a non-empty set {min,max}Ops with one logic or the
 -- other, we finally try to split the tree on “hard splitters” if there is
 -- any.
-reassociateFlatOpTree ::
-  -- | Flat 'OpTree', with fixity info wrapped around each operator
-  OpTree ty (OpInfo op) ->
-  -- | Re-associated 'OpTree', with fixity info wrapped around each operator
-  OpTree ty (OpInfo op)
+reassociateFlatOpTree
+    :: OpTree ty (OpInfo op)
+    -- ^ Flat 'OpTree', with fixity info wrapped around each operator
+    -> OpTree ty (OpInfo op)
+    -- ^ Re-associated 'OpTree', with fixity info wrapped around each operator
 reassociateFlatOpTree tree@(OpNode _) = tree
 reassociateFlatOpTree tree@(OpBranches noptExprs noptOps) =
-  case indexOfMinMaxPrecOps noptOps of
-    (Just minIndices, _) -> splitTree noptExprs noptOps minIndices
-    (_, Just maxIndices) -> groupTree noptExprs noptOps maxIndices
-    _ -> case indicesOfHardSplitter of
-      [] -> tree
-      indices -> splitTree noptExprs noptOps indices
-  where
-    indicesOfHardSplitter =
-      fmap fst
-        $ filter (isHardSplitterOp . opiFixityApproximation . snd)
-        $ zip [0 ..] noptOps
-    indexOfMinMaxPrecOps [] = (Nothing, Nothing)
-    indexOfMinMaxPrecOps (oo : oos) = go oos 1 oo (Just [0]) oo (Just [0])
-      where
-        go ::
-          -- Remaining operators to look up
-          [OpInfo op] ->
-          -- Index of the next operator
-          Int ->
-          -- representative of the current minOps set, if there is one,
-          -- or representative of the lowest precedence level encountered
-          -- so far otherwise
-          OpInfo op ->
-          -- indices of the elements of the candidate minOps set,
-          -- if there is any
-          Maybe [Int] ->
-          -- representative of the current maxOps set, if there is one, or
-          -- representative of the highest precedence level encountered
-          -- so far otherwise
-          OpInfo op ->
-          -- indices of the elements of the candidate maxOps set,
-          -- if there is any
-          Maybe [Int] ->
-          -- (indices of minOps elements, indices of maxOps elements)
-          (Maybe [Int], Maybe [Int])
-        go [] _ _ minRes _ maxRes = (reverse <$> minRes, reverse <$> maxRes)
-        go (o : os) i minOpi minRes maxOpi maxRes =
-          let (minOpi', minRes') = case compareOp o minOpi of
-                Just EQ -> (minOpi, (:) i <$> minRes)
-                Just LT -> (o, Just [i])
-                Just GT -> (minOpi, minRes)
-                Nothing -> (combine minOpi o, Nothing)
-              (maxOpi', maxRes') = case compareOp o maxOpi of
-                Just EQ -> (maxOpi, (:) i <$> maxRes)
-                Just LT -> (maxOpi, maxRes)
-                Just GT -> (o, Just [i])
-                Nothing -> (combine maxOpi o, Nothing)
-              -- Merge two potential {min/max}Ops representatives for
-              -- which the comparison gave 'OpUnknown' into a representative
-              -- of the {lowest/highest} precedence level encountered so far
-              combine (OpInfo x _ fix1) (OpInfo _ _ fix2) =
-                OpInfo x Nothing (fix1 <> fix2)
-           in go os (i + 1) minOpi' minRes' maxOpi' maxRes'
-    -- If indices = [0, 2, 5], transform
-    --   [ex0 op0 ex1 op1 ex2 op2 ex3 op3 ex4 op4 ex5 op5 ex6 op6 ex7]
-    -- into
-    --   [ex0 op0 [ex1 op1 ex2] op2 [ex3 op3 ex4 op4 ex5] op5 [ex6 op6 ex7]]
-    splitTree nExprs nOps indices = go (NE.toList nExprs) nOps indices 0 [] [] [] []
-      where
-        go ::
-          -- Remaining exprs to look up
-          [OpTree ty (OpInfo op)] ->
-          -- Remaining ops to look up
-          [OpInfo op] ->
-          -- Remaining list of indices of operators on which to split
-          -- (sorted)
-          [Int] ->
-          -- Index of the next expr/op
-          Int ->
-          -- Bag for exprs for the subtree we are building
-          [OpTree ty (OpInfo op)] ->
-          -- Bag for ops for the subtree we are building
-          [OpInfo op] ->
-          -- Bag for exprs of the result tree
-          [OpTree ty (OpInfo op)] ->
-          -- Bag for ops of the result tree
-          [OpInfo op] ->
-          -- Result tree
-          OpTree ty (OpInfo op)
-        go [] _ _ _ subExprs subOps resExprs resOps =
-          -- No expr left to process.
-          -- because we are in a "splitting" logic, there is at least one
-          -- expr in the subExprs bag, so we build a subtree (if necessary)
-          -- with sub-bags, add the node/subtree to the result bag, and then
-          -- emit the result tree
-          let resExpr = buildFromSub (NE.fromList subExprs) subOps
-           in OpBranches (NE.reverse (resExpr :| resExprs)) (reverse resOps)
-        go (x : xs) (o : os) (idx : idxs) i subExprs subOps resExprs resOps
-          | i == idx =
-              -- The op we are looking at is one on which we need to split.
-              -- So we build a subtree from the sub-bags and the current
-              -- expr, append it to the result exprs, and continue with
-              -- cleared sub-bags
-              let resExpr = buildFromSub (x :| subExprs) subOps
-               in go xs os idxs (i + 1) [] [] (resExpr : resExprs) (o : resOps)
-        go (x : xs) ops idxs i subExprs subOps resExprs resOps =
-          -- Either there is no op left, or the op we are looking at is not
-          -- one on which we need to split. So we just add both the current
-          -- expr and current op (if there is any) to the sub-bags
-          let (ops', subOps') = moveOneIfPossible ops subOps
-           in go xs ops' idxs (i + 1) (x : subExprs) subOps' resExprs resOps
+    case indexOfMinMaxPrecOps noptOps of
+        (Just minIndices, _) -> splitTree noptExprs noptOps minIndices
+        (_, Just maxIndices) -> groupTree noptExprs noptOps maxIndices
+        _ -> case indicesOfHardSplitter of
+            [] -> tree
+            indices -> splitTree noptExprs noptOps indices
+    where
+        indicesOfHardSplitter =
+            fmap fst
+                $ filter (isHardSplitterOp . opiFixityApproximation . snd)
+                $ zip [0 ..] noptOps
+        indexOfMinMaxPrecOps [] = (Nothing, Nothing)
+        indexOfMinMaxPrecOps (oo : oos) = go oos 1 oo (Just [0]) oo (Just [0])
+            where
+                go
+                    -- Remaining operators to look up
+                    :: [OpInfo op]
+                    -- Index of the next operator
+                    -> Int
+                    -- representative of the current minOps set, if there is one,
+                    -- or representative of the lowest precedence level encountered
+                    -- so far otherwise
+                    -> OpInfo op
+                    -- indices of the elements of the candidate minOps set,
+                    -- if there is any
+                    -> Maybe [Int]
+                    -- representative of the current maxOps set, if there is one, or
+                    -- representative of the highest precedence level encountered
+                    -- so far otherwise
+                    -> OpInfo op
+                    -- indices of the elements of the candidate maxOps set,
+                    -- if there is any
+                    -> Maybe [Int]
+                    -- (indices of minOps elements, indices of maxOps elements)
+                    -> (Maybe [Int], Maybe [Int])
+                go [] _ _ minRes _ maxRes = (reverse <$> minRes, reverse <$> maxRes)
+                go (o : os) i minOpi minRes maxOpi maxRes =
+                    let (minOpi', minRes') = case compareOp o minOpi of
+                            Just EQ -> (minOpi, (:) i <$> minRes)
+                            Just LT -> (o, Just [i])
+                            Just GT -> (minOpi, minRes)
+                            Nothing -> (combine minOpi o, Nothing)
+                        (maxOpi', maxRes') = case compareOp o maxOpi of
+                            Just EQ -> (maxOpi, (:) i <$> maxRes)
+                            Just LT -> (maxOpi, maxRes)
+                            Just GT -> (o, Just [i])
+                            Nothing -> (combine maxOpi o, Nothing)
+                        -- Merge two potential {min/max}Ops representatives for
+                        -- which the comparison gave 'OpUnknown' into a representative
+                        -- of the {lowest/highest} precedence level encountered so far
+                        combine (OpInfo x _ fix1) (OpInfo _ _ fix2) =
+                            OpInfo x Nothing (fix1 <> fix2)
+                     in go os (i + 1) minOpi' minRes' maxOpi' maxRes'
+        -- If indices = [0, 2, 5], transform
+        --   [ex0 op0 ex1 op1 ex2 op2 ex3 op3 ex4 op4 ex5 op5 ex6 op6 ex7]
+        -- into
+        --   [ex0 op0 [ex1 op1 ex2] op2 [ex3 op3 ex4 op4 ex5] op5 [ex6 op6 ex7]]
+        splitTree nExprs nOps indices = go (NE.toList nExprs) nOps indices 0 [] [] [] []
+            where
+                go
+                    -- Remaining exprs to look up
+                    :: [OpTree ty (OpInfo op)]
+                    -- Remaining ops to look up
+                    -> [OpInfo op]
+                    -- Remaining list of indices of operators on which to split
+                    -- (sorted)
+                    -> [Int]
+                    -- Index of the next expr/op
+                    -> Int
+                    -- Bag for exprs for the subtree we are building
+                    -> [OpTree ty (OpInfo op)]
+                    -- Bag for ops for the subtree we are building
+                    -> [OpInfo op]
+                    -- Bag for exprs of the result tree
+                    -> [OpTree ty (OpInfo op)]
+                    -- Bag for ops of the result tree
+                    -> [OpInfo op]
+                    -- Result tree
+                    -> OpTree ty (OpInfo op)
+                go [] _ _ _ subExprs subOps resExprs resOps =
+                    -- No expr left to process.
+                    -- because we are in a "splitting" logic, there is at least one
+                    -- expr in the subExprs bag, so we build a subtree (if necessary)
+                    -- with sub-bags, add the node/subtree to the result bag, and then
+                    -- emit the result tree
+                    let resExpr = buildFromSub (NE.fromList subExprs) subOps
+                     in OpBranches (NE.reverse (resExpr :| resExprs)) (reverse resOps)
+                go (x : xs) (o : os) (idx : idxs) i subExprs subOps resExprs resOps
+                    | i == idx =
+                        -- The op we are looking at is one on which we need to split.
+                        -- So we build a subtree from the sub-bags and the current
+                        -- expr, append it to the result exprs, and continue with
+                        -- cleared sub-bags
+                        let resExpr = buildFromSub (x :| subExprs) subOps
+                         in go xs os idxs (i + 1) [] [] (resExpr : resExprs) (o : resOps)
+                go (x : xs) ops idxs i subExprs subOps resExprs resOps =
+                    -- Either there is no op left, or the op we are looking at is not
+                    -- one on which we need to split. So we just add both the current
+                    -- expr and current op (if there is any) to the sub-bags
+                    let (ops', subOps') = moveOneIfPossible ops subOps
+                     in go xs ops' idxs (i + 1) (x : subExprs) subOps' resExprs resOps
 
-    -- If indices = [0, 1, 4], transform
-    --   [ex0 op0 ex1 op1 ex2 op2 ex3 op3 ex4 op4 ex5 op5 ex6 op6 ex7]
-    -- into
-    --   [[ex0 op0 ex1 op1 ex2] op2 ex3 op3 [ex4 op4 ex5] op5 ex6 op6 ex7]
-    groupTree nExprs nOps indices = go (NE.toList nExprs) nOps indices 0 [] [] [] []
-      where
-        go ::
-          -- remaining exprs to look up
-          [OpTree ty (OpInfo op)] ->
-          -- remaining ops to look up
-          [OpInfo op] ->
-          -- remaining list of indices of operators on which to group
-          -- (sorted)
-          [Int] ->
-          -- index of the next expr/op
-          Int ->
-          -- bag for exprs for the subtree we are building
-          [OpTree ty (OpInfo op)] ->
-          -- bag for ops for the subtree we are building
-          [OpInfo op] ->
-          -- bag for exprs of the result tree
-          [OpTree ty (OpInfo op)] ->
-          -- bag for ops of the result tree
-          [OpInfo op] ->
-          -- result tree
-          OpTree ty (OpInfo op)
-        go [] _ _ _ subExprs subOps resExprs resOps =
-          -- no expr left to process
-          -- because we are in a "grouping" logic, the subExprs bag might be
-          -- empty. If it is not, we build a subtree (if necessary) with
-          -- sub-bags and add the resulting node/subtree to the result bag.
-          -- In any case, we then emit the result tree
-          let resExprs' = case NE.nonEmpty subExprs of
-                Nothing -> NE.fromList resExprs
-                Just subExprs' -> buildFromSub subExprs' subOps :| resExprs
-           in OpBranches (NE.reverse resExprs') (reverse resOps)
-        go (x : xs) (o : os) (idx : idxs) i subExprs subOps resExprs resOps
-          | i == idx =
-              -- The op we are looking at is one on which we need to group.
-              -- So we just add the current expr and op to the sub-bags.
-              go xs os idxs (i + 1) (x : subExprs) (o : subOps) resExprs resOps
-        go (x : xs) ops idxs i subExprs@(_ : _) subOps resExprs resOps =
-          -- Either there is no op left, or the op we are looking at is not
-          -- one on which we need to split, but in any case the sub-bags are
-          -- not empty. So we finalize the started group using sub-bags and
-          -- the current expr, to form a subtree which is then added to the
-          -- result bag.
-          let (ops', resOps') = moveOneIfPossible ops resOps
-              resExpr = buildFromSub (x :| subExprs) subOps
-           in go xs ops' idxs (i + 1) [] [] (resExpr : resExprs) resOps'
-        go (x : xs) ops idxs i [] subOps resExprs resOps =
-          -- Either there is no op left, or the op we are looking at is not
-          -- one on which we need to split, but the sub-bags are empty. So
-          -- we just add both the current expr and current op (if there is
-          -- any) to the result bags
-          let (ops', resOps') = moveOneIfPossible ops resOps
-           in go xs ops' idxs (i + 1) [] subOps (x : resExprs) resOps'
+        -- If indices = [0, 1, 4], transform
+        --   [ex0 op0 ex1 op1 ex2 op2 ex3 op3 ex4 op4 ex5 op5 ex6 op6 ex7]
+        -- into
+        --   [[ex0 op0 ex1 op1 ex2] op2 ex3 op3 [ex4 op4 ex5] op5 ex6 op6 ex7]
+        groupTree nExprs nOps indices = go (NE.toList nExprs) nOps indices 0 [] [] [] []
+            where
+                go
+                    -- remaining exprs to look up
+                    :: [OpTree ty (OpInfo op)]
+                    -- remaining ops to look up
+                    -> [OpInfo op]
+                    -- remaining list of indices of operators on which to group
+                    -- (sorted)
+                    -> [Int]
+                    -- index of the next expr/op
+                    -> Int
+                    -- bag for exprs for the subtree we are building
+                    -> [OpTree ty (OpInfo op)]
+                    -- bag for ops for the subtree we are building
+                    -> [OpInfo op]
+                    -- bag for exprs of the result tree
+                    -> [OpTree ty (OpInfo op)]
+                    -- bag for ops of the result tree
+                    -> [OpInfo op]
+                    -- result tree
+                    -> OpTree ty (OpInfo op)
+                go [] _ _ _ subExprs subOps resExprs resOps =
+                    -- no expr left to process
+                    -- because we are in a "grouping" logic, the subExprs bag might be
+                    -- empty. If it is not, we build a subtree (if necessary) with
+                    -- sub-bags and add the resulting node/subtree to the result bag.
+                    -- In any case, we then emit the result tree
+                    let resExprs' = case NE.nonEmpty subExprs of
+                            Nothing -> NE.fromList resExprs
+                            Just subExprs' -> buildFromSub subExprs' subOps :| resExprs
+                     in OpBranches (NE.reverse resExprs') (reverse resOps)
+                go (x : xs) (o : os) (idx : idxs) i subExprs subOps resExprs resOps
+                    | i == idx =
+                        -- The op we are looking at is one on which we need to group.
+                        -- So we just add the current expr and op to the sub-bags.
+                        go xs os idxs (i + 1) (x : subExprs) (o : subOps) resExprs resOps
+                go (x : xs) ops idxs i subExprs@(_ : _) subOps resExprs resOps =
+                    -- Either there is no op left, or the op we are looking at is not
+                    -- one on which we need to split, but in any case the sub-bags are
+                    -- not empty. So we finalize the started group using sub-bags and
+                    -- the current expr, to form a subtree which is then added to the
+                    -- result bag.
+                    let (ops', resOps') = moveOneIfPossible ops resOps
+                        resExpr = buildFromSub (x :| subExprs) subOps
+                     in go xs ops' idxs (i + 1) [] [] (resExpr : resExprs) resOps'
+                go (x : xs) ops idxs i [] subOps resExprs resOps =
+                    -- Either there is no op left, or the op we are looking at is not
+                    -- one on which we need to split, but the sub-bags are empty. So
+                    -- we just add both the current expr and current op (if there is
+                    -- any) to the result bags
+                    let (ops', resOps') = moveOneIfPossible ops resOps
+                     in go xs ops' idxs (i + 1) [] subOps (x : resExprs) resOps'
 
-    moveOneIfPossible [] bs = ([], bs)
-    moveOneIfPossible (a : as) bs = (as, a : bs)
+        moveOneIfPossible [] bs = ([], bs)
+        moveOneIfPossible (a : as) bs = (as, a : bs)
 
-    buildFromSub subExprs subOps = reassociateFlatOpTree $ case subExprs of
-      -- Do not build a subtree when the potential subtree would have
-      -- 1 expr(s) and 0 op(s)
-      x :| [] -> x
-      _ -> OpBranches (NE.reverse subExprs) (reverse subOps)
+        buildFromSub subExprs subOps = reassociateFlatOpTree $ case subExprs of
+            -- Do not build a subtree when the potential subtree would have
+            -- 1 expr(s) and 0 op(s)
+            x :| [] -> x
+            _ -> OpBranches (NE.reverse subExprs) (reverse subOps)
 
 -- | Indicate if an operator has @'InfixR' 0@ fixity. We special-case this
 -- class of operators because they often have, like ('$'), a specific

@@ -2,8 +2,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | An abstraction for colorful output in terminal.
-module Ormolu.Terminal
-  ( -- * The 'Term' abstraction
+module Ormolu.Terminal (
+    -- * The 'Term' abstraction
     Term,
     ColorMode (..),
     runTerm,
@@ -20,8 +20,7 @@ module Ormolu.Terminal
     putShow,
     putOutputable,
     newline,
-  )
-where
+) where
 
 import Control.Applicative (Const (..))
 import Control.Monad (forM_)
@@ -42,54 +41,54 @@ import System.IO (Handle, hFlush)
 type Term = TermOutput ()
 
 newtype TermOutput a = TermOutput (Const (Seq TermOutputNode) a)
-  deriving (Semigroup, Monoid, Functor, Applicative)
+    deriving (Applicative, Functor, Monoid, Semigroup)
 
 data TermOutputNode
-  = OutputText Text
-  | WithColor Color Term
-  | WithBold Term
+    = OutputText Text
+    | WithColor Color Term
+    | WithBold Term
 
 singleTerm :: TermOutputNode -> Term
 singleTerm = TermOutput . Const . Seq.singleton
 
 -- | Whether to use colors and other features of ANSI terminals.
 data ColorMode = Never | Always | Auto
-  deriving (Eq, Show, Enum, Bounded)
+    deriving (Bounded, Enum, Eq, Show)
 
 -- | Run 'Term' monad.
-runTerm ::
-  Term ->
-  -- | Color mode
-  ColorMode ->
-  -- | Handle to print to
-  Handle ->
-  IO ()
+runTerm
+    :: Term
+    -> ColorMode
+    -- ^ Color mode
+    -> Handle
+    -- ^ Handle to print to
+    -> IO ()
 runTerm term0 colorMode handle = do
-  useSGR <- case colorMode of
-    Never -> return False
-    Always -> return True
-    Auto -> hSupportsANSI handle
-  runTerm' useSGR term0
-  hFlush handle
-  where
-    runTerm' useSGR = go
-      where
-        go (TermOutput (Const nodes)) =
-          forM_ nodes $ \case
-            OutputText s -> T.Utf8.hPutStr handle s
-            WithColor color term -> withSGR [SetColor Foreground Dull color] (go term)
-            WithBold term -> withSGR [SetConsoleIntensity BoldIntensity] (go term)
+    useSGR <- case colorMode of
+        Never -> return False
+        Always -> return True
+        Auto -> hSupportsANSI handle
+    runTerm' useSGR term0
+    hFlush handle
+    where
+        runTerm' useSGR = go
+            where
+                go (TermOutput (Const nodes)) =
+                    forM_ nodes $ \case
+                        OutputText s -> T.Utf8.hPutStr handle s
+                        WithColor color term -> withSGR [SetColor Foreground Dull color] (go term)
+                        WithBold term -> withSGR [SetConsoleIntensity BoldIntensity] (go term)
 
-        withSGR sgrs m
-          | useSGR = hSetSGR handle sgrs >> m >> hSetSGR handle [Reset]
-          | otherwise = m
+                withSGR sgrs m
+                    | useSGR = hSetSGR handle sgrs >> m >> hSetSGR handle [Reset]
+                    | otherwise = m
 
 runTermPure :: Term -> Text
 runTermPure (TermOutput (Const nodes)) =
-  T.concat . toList . flip fmap nodes $ \case
-    OutputText s -> s
-    WithColor _ term -> runTermPure term
-    WithBold term -> runTermPure term
+    T.concat . toList . flip fmap nodes $ \case
+        OutputText s -> s
+        WithColor _ term -> runTermPure term
+        WithBold term -> runTermPure term
 
 ----------------------------------------------------------------------------
 -- Styling

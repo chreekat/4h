@@ -1,11 +1,10 @@
 {-# LANGUAGE LambdaCase #-}
 
-module Ormolu.Utils.Fixity
-  ( getDotOrmoluForSourceFile,
+module Ormolu.Utils.Fixity (
+    getDotOrmoluForSourceFile,
     parseFixityDeclarationStr,
     parseModuleReexportDeclarationStr,
-  )
-where
+) where
 
 import Control.Exception (throwIO)
 import Control.Monad.IO.Class
@@ -27,32 +26,32 @@ import Text.Megaparsec (errorBundlePretty)
 -- default fixity map and module reexports are returned. This function
 -- maintains a cache of fixity overrides and module re-exports where cabal
 -- file paths act as keys.
-getDotOrmoluForSourceFile ::
-  (MonadIO m) =>
-  -- | 'CabalInfo' already obtained for this source file
-  FilePath ->
-  m (FixityOverrides, ModuleReexports)
+getDotOrmoluForSourceFile
+    :: (MonadIO m)
+    => FilePath
+    -- ^ 'CabalInfo' already obtained for this source file
+    -> m (FixityOverrides, ModuleReexports)
 getDotOrmoluForSourceFile sourceFile =
-  liftIO (findDotOrmoluFile sourceFile) >>= \case
-    Just dotOrmoluFile -> liftIO $ withCache cacheRef dotOrmoluFile $ do
-      dotOrmoluRelative <- makeRelativeToCurrentDirectory dotOrmoluFile
-      contents <- T.Utf8.readFile dotOrmoluFile
-      case parseDotOrmolu dotOrmoluRelative contents of
-        Left errorBundle ->
-          throwIO (OrmoluFixityOverridesParseError errorBundle)
-        Right x -> return x
-    Nothing -> return (defaultFixityOverrides, defaultModuleReexports)
+    liftIO (findDotOrmoluFile sourceFile) >>= \case
+        Just dotOrmoluFile -> liftIO $ withCache cacheRef dotOrmoluFile $ do
+            dotOrmoluRelative <- makeRelativeToCurrentDirectory dotOrmoluFile
+            contents <- T.Utf8.readFile dotOrmoluFile
+            case parseDotOrmolu dotOrmoluRelative contents of
+                Left errorBundle ->
+                    throwIO (OrmoluFixityOverridesParseError errorBundle)
+                Right x -> return x
+        Nothing -> return (defaultFixityOverrides, defaultModuleReexports)
 
 -- | Find the path to an appropriate @.ormolu@ file for a Haskell source
 -- file, if available.
-findDotOrmoluFile ::
-  (MonadIO m) =>
-  -- | Path to a Haskell source file
-  FilePath ->
-  -- | Absolute path to the closest @.ormolu@ file, if available
-  m (Maybe FilePath)
+findDotOrmoluFile
+    :: (MonadIO m)
+    => FilePath
+    -- ^ Path to a Haskell source file
+    -> m (Maybe FilePath)
+    -- ^ Absolute path to the closest @.ormolu@ file, if available
 findDotOrmoluFile = findClosestFileSatisfying $ \x ->
-  x == ".ormolu"
+    x == ".ormolu"
 
 -- | Cache ref that maps names of @.ormolu@ files to their contents.
 cacheRef :: Cache FilePath (FixityOverrides, ModuleReexports)
@@ -61,20 +60,20 @@ cacheRef = unsafePerformIO newCache
 
 -- | A wrapper around 'parseFixityDeclaration' for parsing individual fixity
 -- definitions.
-parseFixityDeclarationStr ::
-  -- | Input to parse
-  String ->
-  -- | Parse result
-  Either String [(OpName, FixityInfo)]
+parseFixityDeclarationStr
+    :: String
+    -- ^ Input to parse
+    -> Either String [(OpName, FixityInfo)]
+    -- ^ Parse result
 parseFixityDeclarationStr =
-  first errorBundlePretty . parseFixityDeclaration . T.pack
+    first errorBundlePretty . parseFixityDeclaration . T.pack
 
 -- | A wrapper around 'parseModuleReexportDeclaration' for parsing
 -- a individual module reexport.
-parseModuleReexportDeclarationStr ::
-  -- | Input to parse
-  String ->
-  -- | Parse result
-  Either String (ModuleName, NonEmpty (Maybe PackageName, ModuleName))
+parseModuleReexportDeclarationStr
+    :: String
+    -- ^ Input to parse
+    -> Either String (ModuleName, NonEmpty (Maybe PackageName, ModuleName))
+    -- ^ Parse result
 parseModuleReexportDeclarationStr =
-  first errorBundlePretty . parseModuleReexportDeclaration . T.pack
+    first errorBundlePretty . parseModuleReexportDeclaration . T.pack

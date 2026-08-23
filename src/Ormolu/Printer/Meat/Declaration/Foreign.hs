@@ -1,10 +1,9 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Ormolu.Printer.Meat.Declaration.Foreign
-  ( p_foreignDecl,
-  )
-where
+module Ormolu.Printer.Meat.Declaration.Foreign (
+    p_foreignDecl,
+) where
 
 import Control.Monad
 import GHC.Hs
@@ -18,26 +17,26 @@ import Ormolu.Printer.Meat.Declaration.StringLiteral
 
 p_foreignDecl :: ForeignDecl GhcPs -> R ()
 p_foreignDecl = \case
-  fd@ForeignImport {fd_fi} -> do
-    p_foreignImport fd_fi
-    p_foreignTypeSig fd
-  fd@ForeignExport {fd_fe} -> do
-    p_foreignExport fd_fe
-    p_foreignTypeSig fd
+    fd@ForeignImport {fd_fi} -> do
+        p_foreignImport fd_fi
+        p_foreignTypeSig fd
+    fd@ForeignExport {fd_fe} -> do
+        p_foreignExport fd_fe
+        p_foreignTypeSig fd
 
 -- | Printer for the last part of an import\/export, which is function name
 -- and type signature.
 p_foreignTypeSig :: ForeignDecl GhcPs -> R ()
 p_foreignTypeSig fd = do
-  breakpoint
-  inci
-    . switchLayout
-      [ getLocA (fd_name fd),
-        (getLocA . fd_sig_ty) fd
-      ]
-    $ do
-      p_rdrName (fd_name fd)
-      p_typeAscription (fd_sig_ty fd)
+    breakpoint
+    inci
+        . switchLayout
+            [ getLocA (fd_name fd)
+            , (getLocA . fd_sig_ty) fd
+            ]
+        $ do
+            p_rdrName (fd_name fd)
+            p_typeAscription (fd_sig_ty fd)
 
 -- | Printer for 'ForeignImport'.
 --
@@ -53,21 +52,21 @@ p_foreignTypeSig fd = do
 -- 'Outputable' instance of 'ForeignImport' for details.
 p_foreignImport :: ForeignImport GhcPs -> R ()
 p_foreignImport (CImport sourceText cCallConv safety _ _) = do
-  txt "foreign import"
-  space
-  located cCallConv atom
-  -- Need to check for 'noLoc' for the 'safe' annotation
-  when (isGoodSrcSpan $ getLocA safety) (space >> atom safety)
-  inci $ located sourceText $ \case
-    NoSourceText -> pure ()
-    SourceText lit -> do
-      breakpoint
-      p_stringLit lit
+    txt "foreign import"
+    space
+    located cCallConv atom
+    -- Need to check for 'noLoc' for the 'safe' annotation
+    when (isGoodSrcSpan $ getLocA safety) (space >> atom safety)
+    inci $ located sourceText $ \case
+        NoSourceText -> pure ()
+        SourceText lit -> do
+            breakpoint
+            p_stringLit lit
 
 p_foreignExport :: ForeignExport GhcPs -> R ()
 p_foreignExport (CExport sourceText (L loc (CExportStatic _ _ cCallConv))) = do
-  txt "foreign export"
-  space
-  located (L loc cCallConv) atom
-  space
-  located sourceText p_sourceText
+    txt "foreign export"
+    space
+    located (L loc cCallConv) atom
+    space
+    located sourceText p_sourceText
