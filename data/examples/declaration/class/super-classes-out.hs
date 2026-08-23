@@ -3,12 +3,13 @@ class Foo a
 class (Foo a) => Bar a
 
 class
-  (Foo a, Bar a) =>
-  Baz a
+    (Bar a, Foo a) =>
+    Baz a
 
 class
-  ( Foo a, -- Foo?
-    Bar a, -- Bar?
-    Baz a -- Baz
-  ) =>
-  BarBar a
+    ( -- Foo?
+      Bar a -- Bar?
+    , Baz a -- Baz
+    , Foo a
+    ) =>
+    BarBar a

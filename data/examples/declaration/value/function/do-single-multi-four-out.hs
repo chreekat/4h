@@ -1,4 +1,0 @@
-foo = do
-    ( bar
-            baz
-        )

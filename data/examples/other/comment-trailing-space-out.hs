@@ -1,9 +1,9 @@
 data T
-  = {-
+    = {-
 
-      some multi-line comment
+        some multi-line comment
 
-      with empty lines
+        with empty lines
 
-    -}
-    A
+      -}
+      A

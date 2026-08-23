@@ -10,8 +10,8 @@ foo  =  5
 
 bar :: Int -> Int
 bar = \case
-  0 -> foo
-  x -> x - foo
+    0 -> foo
+    x -> x - foo
 
 baz :: Int -> Int
 baz = gege

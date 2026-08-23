@@ -1,4 +1,0 @@
-doBlock = do
-    a --
-
-    b

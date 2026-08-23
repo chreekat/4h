@@ -1,12 +1,11 @@
-module Magic
-  ( -- * Something
+module Magic (
+    -- * Something
     -- $explanation
 
     -- ** Another level
     foo,
     bar,
-  )
-where
+) where
 
 -- $explanation
 --

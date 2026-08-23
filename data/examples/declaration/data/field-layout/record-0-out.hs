@@ -1,10 +1,10 @@
 -- | Foo.
 data Foo = Foo
-  { -- | Something
-    foo :: Foo Int Int,
-    -- | Something else
-    bar ::
-      Bar
-        Char
-        Char
-  }
+    { foo :: Foo Int Int
+    -- ^ Something
+    , bar
+        :: Bar
+            Char
+            Char
+    -- ^ Something else
+    }

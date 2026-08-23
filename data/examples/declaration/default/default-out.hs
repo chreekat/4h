@@ -3,10 +3,10 @@ module MyModule (default Monoid) where
 default (Int, Foo, Bar)
 
 default
-  ( Int,
-    Foo,
-    Bar
-  )
+    ( Int
+    , Foo
+    , Bar
+    )
 
 default Num (Int, Float)
 

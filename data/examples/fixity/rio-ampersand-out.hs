@@ -3,5 +3,5 @@ module RioExample where
 import RIO
 
 message =
-  greetingText <> userNameText
-    & Text.strip
+    greetingText <> userNameText
+        & Text.strip

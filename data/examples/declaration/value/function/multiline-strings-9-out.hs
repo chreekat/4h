@@ -1,11 +1,11 @@
 {-# LANGUAGE MultilineStrings #-}
 
 multilineBlank =
-  """
-  1
+    """
+    1
 
 
 
 
-  6
-  """
+    6
+    """

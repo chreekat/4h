@@ -1,2 +1,2 @@
 type family Foo a where
-  Foo '( 'x', a) = a
+    Foo '( 'x', a) = a

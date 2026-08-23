@@ -1,28 +1,28 @@
 {-# LANGUAGE MultilineStrings #-}
 
 s =
-  """
+    """
 
-  a
-  b
-  c
-  """
+    a
+    b
+    c
+    """
 
 -- equivalent to
 s' = "\na\nb\nc"
 
 s1 =
-  """    a
-  b
-  c
-  """
+    """    a
+    b
+    c
+    """
 
 s2 =
-  """
-  a
-  b
-  c
-  """
+    """
+    a
+    b
+    c
+    """
 
 -- In the current proposal, these are equivalent to
 -- the below. If leading newline were removed at the

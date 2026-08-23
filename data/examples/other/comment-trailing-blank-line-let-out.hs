@@ -1,5 +1,5 @@
 letBlock =
-  let a = a --
+    let a = a --
 
-      b = b
-   in c
+        b = b
+     in c

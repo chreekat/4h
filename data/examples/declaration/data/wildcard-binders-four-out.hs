@@ -1,1 +1,0 @@
-data Proxy _ = Proxy

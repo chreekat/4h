@@ -1,11 +1,11 @@
 import Servant.API
 
 type PermuteRef =
-  "a"
-    :> ( "b" :> "c" :> End
-           :<|> "c" :> "b" :> End
-       )
-    :<|> "b"
-      :> ( "a" :> "c" :> End
-             :<|> "c" :> "a" :> End
-         )
+    "a"
+        :> ( "b" :> "c" :> End
+                :<|> "c" :> "b" :> End
+           )
+        :<|> "b"
+            :> ( "a" :> "c" :> End
+                    :<|> "c" :> "a" :> End
+               )

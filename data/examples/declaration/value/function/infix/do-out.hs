@@ -1,13 +1,13 @@
 main =
-  do stuff
+    do stuff
     `finally` do
-      recover
+        recover
 
 main = do stuff `finally` recover
 
 main = do { stuff } `finally` recover
 
 foo =
-  do
-    1
-    + 2
+    do
+        1
+        + 2

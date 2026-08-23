@@ -1,5 +1,5 @@
 whereBlock = foo
-  where
-    a = a --
+    where
+        a = a --
 
-    b = b
+        b = b

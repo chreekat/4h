@@ -1,5 +1,5 @@
 foo =
-  map bar $
-    [ baz
-    ]
-      ++ quux
+    map bar $
+        [ baz
+        ]
+            ++ quux

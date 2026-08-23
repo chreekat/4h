@@ -1,12 +1,12 @@
 {-# LANGUAGE MultilineStrings #-}
 
 type Foo =
-  """
-  yeah
-    yeah"""
+    """
+    yeah
+      yeah"""
 
 foo =
-  foo
-    @"""yeah
-     yeah
-     """
+    foo
+        @"""yeah
+         yeah
+         """

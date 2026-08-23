@@ -1,5 +1,4 @@
-module Foo
-  ( -- | asdf
+module Foo (
+    -- | asdf
     foo,
-  )
-where
+) where

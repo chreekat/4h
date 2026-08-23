@@ -1,4 +1,3 @@
-module Foo
-  (
-  )
-where
+module Foo (
+
+) where

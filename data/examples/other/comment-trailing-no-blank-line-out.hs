@@ -1,25 +1,25 @@
 noBlankAfterComment = do
-  a --
-  b
+    a --
+    b
 
 noBlankTextComment = do
-  a -- some text
-  b
+    a -- some text
+    b
 
 noBlankBlockComment = do
-  a {- foo -}
-  b
+    a {- foo -}
+    b
 
 blockCommentFollowedByExpr = do
-  a {- foo -} 1
-  b
+    a {- foo -} 1
+    b
 
 whereNoBlank = foo
-  where
-    a = a --
-    b = b
+    where
+        a = a --
+        b = b
 
 letNoBlank =
-  let a = a --
-      b = b
-   in c
+    let a = a --
+        b = b
+     in c

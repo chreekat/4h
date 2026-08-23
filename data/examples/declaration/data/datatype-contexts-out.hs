@@ -1,11 +1,11 @@
 data (IsString s) => T s = T
 
 data
-  (IsString s) =>
-  T s = T
+    (IsString s) =>
+    T s = T
 
 data
-  ( IsString s,
-    IsString s
-  ) =>
-  T s = T
+    ( IsString s
+    , IsString s
+    ) =>
+    T s = T

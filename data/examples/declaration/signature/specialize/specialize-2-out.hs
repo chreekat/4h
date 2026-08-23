@@ -5,4 +5,4 @@
 {-# SPECIALIZE [1] forall x y. f @Int True (x, y) #-}
 
 {-# SPECIALIZE forall x xs. loop (x : xs)
-  #-}
+    #-}

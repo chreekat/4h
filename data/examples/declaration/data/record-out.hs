@@ -2,22 +2,22 @@ module Main where
 
 -- | Something.
 data Foo = Foo
-  { -- | X
-    fooX :: Int,
-    -- | Y
-    fooY :: Int,
-    -- | BarBaz
-    fooBar, fooBaz :: NonEmpty (Identity Bool),
-    -- | GagGog
-    fooGag,
-    fooGog ::
-      NonEmpty
-        ( Identity
-            Bool
-        ),
-    -- | Huh!
-    fooFoo,
-    barBar ::
-      Int
-  }
-  deriving (Eq, Show)
+    { fooX :: Int
+    -- ^ X
+    , fooY :: Int
+    -- ^ Y
+    , fooBar, fooBaz :: NonEmpty (Identity Bool)
+    -- ^ BarBaz
+    , fooGag
+      , fooGog
+        :: NonEmpty
+            ( Identity
+                Bool
+            )
+    -- ^ GagGog
+    , fooFoo
+      , barBar
+        :: Int
+    -- ^ Huh!
+    }
+    deriving (Eq, Show)

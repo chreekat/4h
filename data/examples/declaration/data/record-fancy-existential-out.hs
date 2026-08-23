@@ -1,6 +1,6 @@
 {-# LANGUAGE ExistentialQuantification #-}
 
-data Foo = forall a b. (Show a, Eq b) => Bar
-  { foo :: a,
-    bars :: b
-  }
+data Foo = forall a b. (Eq b, Show a) => Bar
+    { foo :: a
+    , bars :: b
+    }

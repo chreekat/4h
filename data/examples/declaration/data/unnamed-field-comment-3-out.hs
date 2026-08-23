@@ -1,5 +1,5 @@
 data A
-  = A
-      -- | a number
-      Int
-      Bool
+    = A
+        Int
+        -- ^ a number
+        Bool

@@ -5,9 +5,9 @@ foo = "foobar"
 bar = "foo\&bar\ \baz"
 
 baz =
-  "foo\
-  \bar\
-  \baz"
+    "foo\
+    \bar\
+    \baz"
 
 weirdGap = "\65\ \0"
 

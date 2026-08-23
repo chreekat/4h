@@ -1,22 +1,22 @@
 textComment = do
-  a -- some text
+    a -- some text
 
-  b
+    b
 
 blockComment = do
-  a {- foo -}
+    a {- foo -}
 
-  b
+    b
 
 twoComments = do
-  a --
+    a --
 
-  --
+    --
 
-  bar
+    bar
 
 adjacentThenBlank = do
-  a --
-  --
+    a --
+    --
 
-  bar
+    bar

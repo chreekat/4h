@@ -1,9 +1,8 @@
-module Test
-  ( test,
-  )
-where
+module Test (
+    test,
+) where
 
-test ::
-  test
+test
+    :: test
 
 data T = T

@@ -14,8 +14,8 @@ a3 = f (type (forall a. a))
 a4 = f (type (forall a. (Read a) => String -> a))
 
 foo =
-  f
-    ( type ( Maybe
-               Int
-           )
-    )
+    f
+        ( type ( Maybe
+                    Int
+               )
+        )

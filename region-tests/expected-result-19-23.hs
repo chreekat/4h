@@ -17,7 +17,7 @@ baz :: Int -> Int
 baz = gege
   where
     gege =
-      1
-        >>> zeze
-          + 2
-        >>> nona
+        1
+            >>> zeze
+                + 2
+            >>> nona

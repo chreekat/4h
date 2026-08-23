@@ -1,11 +1,10 @@
 {-# LANGUAGE LambdaCase #-}
 
-module Foo
-  ( foo,
+module Foo (
+    foo,
     bar,
     baz,
-  )
-where
+) where
 
 import Control.Category
 
@@ -14,14 +13,14 @@ foo = 5
 
 bar :: Int -> Int
 bar = \case
-  0 -> foo
-  x -> x - foo
+    0 -> foo
+    x -> x - foo
 
 baz :: Int -> Int
 baz = gege
-  where
-    gege =
-      1
-        >>> zeze
-          + 2
-        >>> nona
+    where
+        gege =
+            1
+                >>> zeze
+                    + 2
+                >>> nona

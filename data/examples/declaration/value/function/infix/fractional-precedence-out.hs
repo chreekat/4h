@@ -1,3 +1,3 @@
 startFormTok |~| messageTag
-  >~< startMessageTok |~| name
-  >~< p' |~| endMessageTok |~| endFormTok
+    >~< startMessageTok |~| name
+    >~< p' |~| endMessageTok |~| endFormTok

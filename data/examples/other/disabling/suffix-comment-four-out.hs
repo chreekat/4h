@@ -1,1 +1,0 @@
-{- ORMOLU_DISABLE -} -- foo

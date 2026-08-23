@@ -1,6 +1,5 @@
-module Foo
-  ( foo,
+module Foo (
+    foo,
     bar,
     baz,
-  )
-where
+) where

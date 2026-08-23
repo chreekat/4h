@@ -1,10 +1,9 @@
-signature Implementation
-  ( Prim,
+signature Implementation (
+    Prim,
     name,
     primName,
     randomBlocks,
-  )
-where
+) where
 
 import Raaz.Core
 import Raaz.Www
@@ -21,8 +20,8 @@ name :: String
 -- |Test line 4
 primName :: String
 
-randomBlocks ::
-  AlignedBlockPtr BufferAlignment Prim ->
-  BlockCount Prim ->
-  Internals ->
-  IO ()
+randomBlocks
+    :: AlignedBlockPtr BufferAlignment Prim
+    -> BlockCount Prim
+    -> Internals
+    -> IO ()

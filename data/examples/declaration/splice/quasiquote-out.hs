@@ -3,7 +3,7 @@
 x = [foo|    foo bar   |]
 
 x =
-  [e|    foo
+    [e|    foo
  bar  {- -}
   |]
 
@@ -12,5 +12,5 @@ x =
 |]
 
 header =
-  [here|
+    [here|
 #include foo|]

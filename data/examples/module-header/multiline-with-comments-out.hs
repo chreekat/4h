@@ -2,8 +2,8 @@
 {-# LANGUAGE TypeFamilies #-}
 
 -- | Header.
-module My.Module
-  ( -- * Something
+module My.Module (
+    -- * Something
     foo,
     bar,
 
@@ -16,7 +16,6 @@ module My.Module
     -- the second line
     bar3,
     module Foo.Bar.Baz,
-  )
-where
+) where
 
 -- Wow

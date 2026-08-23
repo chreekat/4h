@@ -15,30 +15,30 @@ type Coll a = Either [a] (Set a)
 pattern None <- (Left []; Right (toList -> []))
 
 case e of
-  1; 2; 3 -> x
-  4; (5; 6) -> y
+    1; 2; 3 -> x
+    4; (5; 6) -> y
 
 sane e = case e of
-  1
-  2
-  3 ->
-    a
-  4
-  5
-  6 -> b
-  7; 8 -> c
+    1
+    2
+    3 ->
+        a
+    4
+    5
+    6 -> b
+    7; 8 -> c
 
 insane e = case e of
-  A _ _
-  B _
-  C -> 3
-  (D; E (Just _) Nothing) ->
-    4
-  F -> 5
+    A _ _
+    B _
+    C -> 3
+    (D; E (Just _) Nothing) ->
+        4
+    F -> 5
 
 food
-  foo@( A;
-        B;
-        C
-        ) = Just foo
+    foo@( A;
+            B;
+            C
+            ) = Just foo
 food _ = Nothing

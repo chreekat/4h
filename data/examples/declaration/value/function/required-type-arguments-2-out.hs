@@ -10,14 +10,14 @@ ex2' = f ((ctx, ctx') => Int)
 ex3 = f (String -> Bool)
 
 long =
-  f
-    ( forall m a.
-      (A a, M m) =>
-      String ->
-      Bool %1 ->
-      Maybe Int ->
-      Maybe
-        (String, Int) %1 ->
-      Word %m ->
-      Text
-    )
+    f
+        ( forall m a
+           . (A a, M m)
+          => String
+          -> Bool
+          %1 -> Maybe Int
+          -> Maybe
+            (String, Int)
+          %1 -> Word
+          %m -> Text
+        )

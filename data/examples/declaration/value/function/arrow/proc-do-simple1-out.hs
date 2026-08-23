@@ -3,27 +3,27 @@
 bar f = proc a -> do b <- f -< a
 
 barbar f g = proc a -> do
-  b <- f -< a
-  returnA -< b
+    b <- f -< a
+    returnA -< b
 
 barbaz f g = proc (a, b) -> do
-  c <- f -< a
-  d <- g -< b
+    c <- f -< a
+    d <- g -< b
 
 bazbar f = proc a -> do
-  a <-
-    f
-      -<
-        a
+    a <-
+        f
+            -<
+                a
 
 foo =
-  proc x ->
-    do
-        returnA -< x
-      1
+    proc x ->
+        do
+                returnA -< x
+            1
 
 foo a =
-  proc x ->
-    case Left x of
-        Left x -> returnA -< x
-      a
+    proc x ->
+        case Left x of
+                Left x -> returnA -< x
+            a

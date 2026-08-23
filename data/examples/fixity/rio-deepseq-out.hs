@@ -3,5 +3,5 @@ module RioDeepseqExample where
 import RIO
 
 result =
-  forceEvaluationOfBigStructure `deepseq`
-    continueWithNextStep
+    forceEvaluationOfBigStructure `deepseq`
+        continueWithNextStep

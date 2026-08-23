@@ -2,16 +2,16 @@ module Main where
 
 -- | Something.
 data Foo
-  = Foo
-      { -- | X
-        fooX :: Int,
-        -- | Y
-        fooY :: Int
-      }
-  | Bar
-      { -- | X
-        barX :: Int,
-        -- | Y
-        barY :: Int
-      }
-  deriving (Eq, Show)
+    = Foo
+        { fooX :: Int
+        -- ^ X
+        , fooY :: Int
+        -- ^ Y
+        }
+    | Bar
+        { barX :: Int
+        -- ^ X
+        , barY :: Int
+        -- ^ Y
+        }
+    deriving (Eq, Show)

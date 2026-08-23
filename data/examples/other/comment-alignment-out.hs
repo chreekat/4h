@@ -1,9 +1,9 @@
 class Foo a where
-  -- | Foo.
-  foo ::
-    Int ->
-    -- | Something
-    a
+    -- | Foo.
+    foo
+        :: Int
+        -> a
+        -- ^ Something
 
-  -- | Bar.
-  bar :: a
+    -- | Bar.
+    bar :: a

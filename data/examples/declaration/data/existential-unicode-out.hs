@@ -1,9 +1,9 @@
 {-# LANGUAGE UnicodeSyntax #-}
 
 data Foo
-  = forall a.
-    Foo
+    = forall a.
+        Foo
 
 data Bar
-  = forall a.
-    Bar
+    = forall a.
+        Bar

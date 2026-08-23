@@ -1,4 +1,0 @@
-type Test =
-    ( -- a
-      x
-    )
