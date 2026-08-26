@@ -18,7 +18,7 @@
 * [License](#license)
 
 4h is a formatter for Haskell source code. It is a fork of
-[Ormolu](https://github.com/mrkkrp/ormolu) by way of
+[Ormolu](https://github.com/tweag/ormolu) by way of
 [Fourmolu](https://github.com/fourmolu/fourmolu), and it keeps Ormolu's
 central promise:
 
@@ -288,7 +288,7 @@ You can see how 4h decides the fixity of operators if you use `--debug`.
 * CPP support is experimental. CPP is virtually impossible to handle
   correctly, so we process them as a sort of unchangeable snippets. This
   works only in simple cases when CPP conditionals surround top-level
-  declarations. See the [CPP](https://github.com/mrkkrp/ormolu/blob/master/DESIGN.md#cpp) section in the design notes for a
+  declarations. See the [CPP](https://github.com/tweag/ormolu/blob/master/DESIGN.md#cpp) section in the design notes for a
   discussion of the dangers.
 * Various minor idempotence issues, most of them are related to comments.
 
