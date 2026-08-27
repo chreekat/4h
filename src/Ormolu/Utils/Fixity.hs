@@ -23,9 +23,9 @@ import System.IO.Unsafe (unsafePerformIO)
 import Text.Megaparsec (errorBundlePretty)
 
 -- | Attempt to locate and parse an @.ormolu@ file. If it does not exist,
--- default fixity map and module reexports are returned. This function
--- maintains a cache of fixity overrides and module re-exports where cabal
--- file paths act as keys.
+-- the default fixity map and module re-exports are returned. This function
+-- maintains a cache of fixity overrides and module re-exports keyed by
+-- @.ormolu@ file path.
 getDotOrmoluForSourceFile
     :: (MonadIO m)
     => FilePath
@@ -68,8 +68,8 @@ parseFixityDeclarationStr
 parseFixityDeclarationStr =
     first errorBundlePretty . parseFixityDeclaration . T.pack
 
--- | A wrapper around 'parseModuleReexportDeclaration' for parsing
--- a individual module reexport.
+-- | A wrapper around 'parseModuleReexportDeclaration' for parsing an
+-- individual module re-export.
 parseModuleReexportDeclarationStr
     :: String
     -- ^ Input to parse

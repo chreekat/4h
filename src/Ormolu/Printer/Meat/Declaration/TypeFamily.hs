@@ -69,7 +69,7 @@ p_familyResultSigL (L _ a) = case a of
     KindSig NoExtField k -> Just $ do
         p_hsTypeAnnotation k
     TyVarSig NoExtField bndr -> Just $ do
-        equals
+        txt "="
         breakpoint
         located bndr p_hsTyVarBndr
 
@@ -103,7 +103,7 @@ p_tyFamInstEqn FamEqn {..} = do
                 (p_lhsTypeArg <$> feqn_pats)
         inci $ do
             space
-            equals
+            txt "="
             breakpoint
             located feqn_rhs p_hsType
 

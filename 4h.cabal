@@ -8,8 +8,8 @@ maintainer:
     George Thomas <georgefsthomas@gmail.com>
     Brandon Chinn <brandonchinn178@gmail.com>
 tested-with:
-  ghc ==9.10.2
-  ghc ==9.12.2
+  ghc ==9.10.3
+  ghc ==9.12.4
   ghc ==9.14.1
 
 homepage: https://github.com/chreekat/4h
@@ -43,6 +43,9 @@ flag dev
 library
   exposed-modules:
     Ormolu
+    Ormolu.Comments.Anchor
+    Ormolu.Comments.Invariants
+    Ormolu.Comments.Tree
     Ormolu.Config
     Ormolu.Diff.ParseResult
     Ormolu.Diff.Text
@@ -59,6 +62,7 @@ library
     Ormolu.Parser.Result
     Ormolu.Printer
     Ormolu.Printer.Combinators
+    Ormolu.Printer.CommentPlacement
     Ormolu.Printer.Comments
     Ormolu.Printer.Internal
     Ormolu.Printer.Meat.Common
@@ -85,7 +89,6 @@ library
     Ormolu.Printer.Meat.Type
     Ormolu.Printer.Meat.Type.Function
     Ormolu.Printer.Operators
-    Ormolu.Printer.SpanStream
     Ormolu.Processing.Common
     Ormolu.Processing.Cpp
     Ormolu.Processing.Preprocess
@@ -133,6 +136,8 @@ library
       -Wredundant-constraints
       -Wpartial-fields
       -Wunused-packages
+      -haddock
+      -Winvalid-haddock
   else
     ghc-options:
       -O2
@@ -178,6 +183,8 @@ executable 4h
       -Wpartial-fields
       -Wunused-packages
       -Wwarn=unused-packages
+      -haddock
+      -Winvalid-haddock
   else
     ghc-options:
       -O2
@@ -190,6 +197,7 @@ test-suite tests
   hs-source-dirs: tests
   other-modules:
     Ormolu.CabalInfoSpec
+    Ormolu.Comments.AnchorSpec
     Ormolu.Diff.TextSpec
     Ormolu.Fixity.ParserSpec
     Ormolu.Fixity.PrinterSpec
@@ -199,6 +207,7 @@ test-suite tests
     Ormolu.Parser.ParseFailureSpec
     Ormolu.Parser.PragmaSpec
     Ormolu.PrinterSpec
+    Ormolu.TestConfig
 
   default-language: GHC2021
   build-depends:
@@ -239,6 +248,8 @@ test-suite tests
       -Wredundant-constraints
       -Wpartial-fields
       -Wunused-packages
+      -haddock
+      -Winvalid-haddock
   else
     ghc-options:
       -O2

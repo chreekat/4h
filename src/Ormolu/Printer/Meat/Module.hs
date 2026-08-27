@@ -10,7 +10,7 @@ module Ormolu.Printer.Meat.Module (
 ) where
 
 import Control.Monad
-import Data.Choice (pattern With)
+import Data.Choice (pattern Isn't, pattern With)
 import Data.Choice qualified as Choice
 import GHC.Hs hiding (comment)
 import GHC.LanguageExtensions (Extension (ImplicitPrelude))
@@ -27,7 +27,7 @@ import Ormolu.Printer.Meat.ImportExport
 import Ormolu.Printer.Meat.Pragma
 import Ormolu.Style
 
--- | Render a module-like entity (either a regular module or a backpack
+-- | Render a module-like entity (either a regular module or a Backpack
 -- signature).
 p_hsModule
     :: Maybe LComment
@@ -44,7 +44,7 @@ p_hsModule mstackHeader pragmas hsmod@HsModule {..} = do
     switchLayout (deprecSpan <> exportSpans) $
         enterMultilineLayoutIfContainsDocEntries (maybe [] unLoc hsmodExports) $ do
             forM_ mstackHeader $ \(L spn comment) -> do
-                spitCommentNow spn comment
+                spitCommentNow SlotFloating spn comment
                 newline
             newline
             p_pragmas pragmas
@@ -53,7 +53,12 @@ p_hsModule mstackHeader pragmas hsmod@HsModule {..} = do
             newline
             imports <- normalizeImportsR hsmodImports
             unless (null imports) $ do
-                forM_ imports (located' p_hsmodImport)
+                -- The newline goes here rather than at the end of 'p_hsmodImport' so
+                -- that a comment trailing an import is emitted while the printer is
+                -- still on the import's line.
+                forM_ imports $ \x -> do
+                    located' p_hsmodImport x
+                    newline
                 newline
             declNewline
             switchLayout (getLocA <$> hsmodDecls) $ do
@@ -73,7 +78,7 @@ p_hsModuleHeader HsModule {hsmodExt = XModulePs {..}, ..} moduleName = do
             getPrinterOpt poHaddockStyleModule >>= \case
                 PrintStyleInherit -> getPrinterOpt poHaddockStyle
                 PrintStyleOverride s -> pure s
-        forM_ hsmodHaddockModHeader (p_hsDoc' poHStyle Pipe (With #endNewline))
+        forM_ hsmodHaddockModHeader (p_hsDocWith poHStyle Pipe (With #endNewline) (Isn't #mayShareLine))
         p_hsmodName name
 
     forM_ hsmodDeprecMessage $ \w -> do
@@ -98,7 +103,8 @@ p_hsModuleHeader HsModule {hsmodExt = XModulePs {..}, ..} moduleName = do
         Nothing -> return ()
         Just l -> do
             breakpointBeforeExportList
-            encloseLocated l $ \exports -> do
+            located l $ \exports -> do
+                when (null exports) $ locatedEmpty (locA l)
                 inci (p_hsmodExports exports)
 
     breakpointBeforeWhere

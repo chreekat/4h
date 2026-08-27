@@ -93,7 +93,7 @@ not pass if you only build without the `dev` flag.
 
 ## Usage
 
-The following will print the formatted output to the standard output.
+The following prints the formatted output to the standard output:
 
 ```console
 $ 4h Module.hs
@@ -120,7 +120,7 @@ $ 4h --mode inplace $(git ls-files '*.hs')
 $ git ls-files -z '*.hs' | xargs -P 12 -0 4h --mode inplace
 ```
 
-To check if files are already formatted (useful on CI):
+To check whether files are already formatted (useful on CI):
 
 ```console
 $ 4h --mode check src
@@ -247,6 +247,7 @@ Exit code | Meaning
 8         | Cabal file parsing failed
 9         | Missing input file path when using stdin input and accounting for .cabal files
 10        | Parse error while parsing fixity overrides
+11        | Comments of original and formatted code differ
 100       | In checking mode: unformatted files
 101       | Inplace mode does not work with stdin
 102       | Other issue (with multiple input files)
@@ -273,10 +274,11 @@ operator.
   from Hackage), 4h probably doesn't recognize that the operator is the same
   as the third-party one.
 
-  Some reasons this might be the case:
+  Some possible reasons for this:
 
-    * You might have a custom Prelude that re-exports things from Prelude
-    * You might have `-XNoImplicitPrelude` turned on
+    * You have a custom Prelude that re-exports things from the standard
+      Prelude.
+    * You have `-XNoImplicitPrelude` turned on.
 
   If any of these are true, make sure to specify the reexports correctly in a
   `.ormolu` file.

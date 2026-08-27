@@ -2,7 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 -- | A formatter for Haskell source code. This module exposes the official
--- stable API, other modules may be not as reliable.
+-- stable API; other modules may not be as reliable.
 module Ormolu (
     -- * Top-level formatting functions
     ormolu,
@@ -47,9 +47,11 @@ import Data.Text qualified as T
 import Data.Text.IO.Utf8 qualified as T.Utf8
 import Debug.Trace
 import GHC.Driver.Errors.Types
+import GHC.Hs (HsModule (..), locA)
 import GHC.Types.Error
 import GHC.Types.SrcLoc
 import GHC.Utils.Error
+import Ormolu.Comments.Invariants
 import Ormolu.Config
 import Ormolu.Diff.ParseResult
 import Ormolu.Diff.Text
@@ -65,12 +67,12 @@ import System.FilePath
 
 -- | Format a 'Text'.
 --
--- The function
+-- The function:
 --
---     * Needs 'IO' because some functions from GHC that are necessary to
---       setup parsing context require 'IO'. There should be no visible
---       side-effects though.
---     * Takes file name just to use it in parse error messages.
+--     * Needs 'IO' because some GHC functions that are necessary to set up
+--       the parsing context require 'IO'. There should be no visible
+--       side effects, though.
+--     * Takes a file name only to use it in parse error messages.
 --     * Throws 'OrmoluException'.
 --
 -- __NOTE__: The caller is responsible for setting the appropriate value in
@@ -105,15 +107,42 @@ ormolu cfgWithIndices path originalInput = do
                 forM_ comments $ \(L loc comment) ->
                     traceM $ unwords ["*** COMMENT ***", showOutputable loc, show comment]
             _ -> pure ()
-    -- We're forcing 'formattedText' here because otherwise errors (such as
-    -- messages about not-yet-supported functionality) will be thrown later
-    -- when we try to parse the rendered code back, inside of GHC monad
-    -- wrapper which will lead to error messages presenting the exceptions as
-    -- GHC bugs.
-    let !formattedText = printSnippets (Choice.fromBool (cfgDebug cfg)) result0
+    -- We force 'formattedText' here because otherwise errors (such as
+    -- messages about not-yet-supported functionality) would be thrown later,
+    -- when we try to parse the rendered code back inside the GHC monad
+    -- wrapper, which would lead to error messages presenting the exceptions
+    -- as GHC bugs.
+    let printed =
+            printSnippetsWithPlacements
+                (Choice.fromBool (cfgDebug cfg))
+                result0
+        !formattedText = T.concat [t | (t, _, _) <- printed]
+    -- Every comment of the input should come out exactly once, and in the
+    -- order it went in. The AST check below does not cover this: it compares
+    -- the comment streams as multisets, and the comments that travel with
+    -- pragmas are not in the stream at all.
+    unless (cfgUnsafe cfg) . liftIO $ do
+        let violations =
+                concat
+                    [ checkCommentInvariants
+                        (getLoc <$> inputComments r)
+                        (importSpans (prParsedSource r) <> reordered)
+                        placements
+                    | (ParsedSnippet r, (_, placements, reordered)) <- result0 `zip` printed
+                    ]
+            -- Imports are sorted and merged before the printer sees them, so
+            -- their spans come from the input rather than from the printer.
+            importSpans hsmod =
+                [ spn
+                | L l _ <- hsmodImports hsmod
+                , Just spn <- [srcSpanToRealSrcSpan (locA l)]
+                ]
+        unless (null violations) $
+            throwIO (OrmoluCommentInvariantsViolated path violations)
     when (not (cfgUnsafe cfg) || cfgCheckIdempotence cfg) $ do
-        -- Parse the result of pretty-printing again and make sure that AST
-        -- is the same as AST of original snippet module span positions.
+        -- Parse the result of pretty-printing again and make sure that its AST
+        -- is the same as the AST of the original snippet, modulo span
+        -- positions.
         (_, result1) <-
             parseModule'
                 cfg
@@ -173,11 +202,11 @@ ormoluStdin
 ormoluStdin cfg =
     liftIO T.Utf8.getContents >>= ormolu cfg "<stdin>"
 
--- | Refine a 'Config' by incorporating given 'SourceType', 'CabalInfo', and
--- fixity overrides 'FixityMap'. You can use 'detectSourceType' to deduce
--- 'SourceType' based on the file extension,
--- 'CabalUtils.getCabalInfoForSourceFile' to obtain 'CabalInfo' and
--- 'getFixityOverridesForSourceFile' for 'FixityMap'.
+-- | Refine a 'Config' by incorporating the given 'SourceType', 'CabalInfo',
+-- and fixity overrides 'FixityMap'. You can use 'detectSourceType' to deduce
+-- the 'SourceType' from the file extension,
+-- 'CabalUtils.getCabalInfoForSourceFile' to obtain the 'CabalInfo', and
+-- 'getFixityOverridesForSourceFile' for the 'FixityMap'.
 --
 -- @since 0.5.3.0
 refineConfig

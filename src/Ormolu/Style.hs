@@ -101,7 +101,7 @@ printerOpts =
         , poIndentWheres = True
         , poRecordBraceSpace = True
         , poNewlinesBetweenDecls = 1
-        , poHaddockStyle = HaddockSingleLine
+        , poHaddockStyle = HaddockAuto
         , poHaddockStyleModule = PrintStyleInherit
         , poHaddockLocSignature = HaddockLocSigAuto
         , poLetStyle = LetInline
@@ -141,6 +141,8 @@ data HaddockPrintStyle
     = HaddockSingleLine
     | HaddockMultiLine
     | HaddockMultiLineCompact
+    | -- | Reproduce the Haddock as the author wrote it
+      HaddockAuto
     deriving (Bounded, Enum, Eq, Show)
 
 data HaddockPrintStyleModule
