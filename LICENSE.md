@@ -1,4 +1,5 @@
 Copyright © 2018–2020 Tweag I/O, 2020-present Matt Parsons
+Copyright © 2026 Bryan Richter
 
 All rights reserved.
 
